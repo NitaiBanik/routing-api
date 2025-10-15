@@ -42,7 +42,7 @@ func main() {
 		log.Printf("Server starting on %s", server.Addr)
 		log.Printf("APIs: %v", cfg.ApplicationAPIs)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal("Server failed to start:", err)
+			log.Fatal("server failed:", err)
 		}
 	}()
 
@@ -50,14 +50,14 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Server shutting down...")
+	log.Println("shutting down...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		log.Fatal("forced shutdown:", err)
 	}
 
-	log.Println("Server exited")
+	log.Println("exited")
 }
