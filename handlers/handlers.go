@@ -59,14 +59,14 @@ func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 	apiURL := h.GetNextAPI()
 	if apiURL == "" {
-		http.Error(w, "No application APIs configured", http.StatusInternalServerError)
+		http.Error(w, "no apis configured", http.StatusInternalServerError)
 		return
 	}
 
-	// Extract request number from body for better tracking
+	// try to get request number from body
 	requestNum := "unknown"
 	bodyBytes, _ := io.ReadAll(req.Body)
-	req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Reset body for forwarding
+	req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	var payload map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &payload); err == nil {
@@ -79,13 +79,13 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		http.Error(w, "cant read body", http.StatusBadRequest)
 		return
 	}
 
 	forwardReq, err := http.NewRequest(req.Method, apiURL+req.URL.Path, bytes.NewBuffer(body))
 	if err != nil {
-		http.Error(w, "Failed to create forwarded request", http.StatusInternalServerError)
+		http.Error(w, "cant create request", http.StatusInternalServerError)
 		return
 	}
 
@@ -105,7 +105,7 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 
 	resp, err := client.Do(forwardReq)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to forward request to %s: %v", apiURL, err), http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf("cant reach %s: %v", apiURL, err), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
@@ -120,6 +120,6 @@ func (h *Handler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
-		log.Printf("Error copying response body: %v", err)
+		log.Printf("error copying response: %v", err)
 	}
 }
