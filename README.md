@@ -26,7 +26,7 @@ You'll need Go 1.21 or newer installed on your machine.
    ```bash
    curl -X POST http://localhost:3000/testapi \
      -H "Content-Type: application/json" \
-     -d '{"message": "Hello World"}'
+     -d '{"request_number": 1, "message": "Hello World"}'
    ```
 
 ### Quick start with testing
@@ -63,6 +63,18 @@ curl -X POST http://localhost:3000/testapi \
 ```
 
 The request will be forwarded to one of the application APIs and you'll get back their response.
+
+### Testing Round-Robin Load Balancing
+
+To see the round-robin behavior in action, send multiple requests:
+
+```bash
+curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 1, "message": "test 1"}'
+curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 2, "message": "test 2"}'
+curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 3, "message": "test 3"}'
+```
+
+Each request will be distributed to different application API instances in round-robin fashion.
 
 ### GET /health
 
