@@ -7,10 +7,9 @@ type HTTPClient interface {
 }
 
 type LoadBalancer interface {
-	Next() string
+	Next() HTTPClient
 }
 
 type ProxyHandler struct {
 	loadBalancer LoadBalancer
-	httpClient   HTTPClient
 }

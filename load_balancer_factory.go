@@ -9,8 +9,8 @@ func NewLoadBalancerFactory() *LoadBalancerFactory {
 func (f *LoadBalancerFactory) CreateLoadBalancer(balancerType string, servers []string) LoadBalancer {
 	switch balancerType {
 	case "round-robin":
-		return &roundRobinLoadBalancer{servers: servers}
+		return newRoundRobinLoadBalancer(servers)
 	default:
-		return &roundRobinLoadBalancer{servers: servers} // default to round-robin
+		return newRoundRobinLoadBalancer(servers) // default to round-robin
 	}
 }
