@@ -10,6 +10,7 @@ type Config struct {
 	Environment     string
 	LogLevel        string
 	ApplicationAPIs []string
+	BalancerType    string
 }
 
 func Load() *Config {
@@ -18,6 +19,7 @@ func Load() *Config {
 		Environment:     getEnv("ENVIRONMENT", "development"),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
 		ApplicationAPIs: getApplicationAPIs(),
+		BalancerType:    getEnv("BALANCER_TYPE", "round-robin"),
 	}
 }
 
