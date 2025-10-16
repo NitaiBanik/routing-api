@@ -2,17 +2,20 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"time"
 )
 
-func NewProxyHandler(servers []string, balancerType string) *ProxyHandler {
+func NewProxyHandler(servers []string, balancerType string, retryConfig RetryConfig, circuitConfig CircuitBreakerConfig) *ProxyHandler {
 	loadBalancerFactory := NewLoadBalancerFactory()
 
 	return &ProxyHandler{
-		loadBalancer: loadBalancerFactory.CreateLoadBalancer(balancerType, servers),
+		loadBalancer: loadBalancerFactory.CreateLoadBalancer(balancerType, servers, retryConfig, circuitConfig),
 	}
 }
 
@@ -42,7 +45,7 @@ func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 	}
 	req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-	forwardReq, err := http.NewRequest(req.Method, req.URL.Path, bytes.NewBuffer(bodyBytes))
+	forwardReq, err := http.NewRequestWithContext(req.Context(), req.Method, req.URL.Path, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "cannot create forwarded request")
 		return
@@ -76,5 +79,10 @@ func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
+		log.Printf("Error copying response body: %v", err)
 	}
+}
+
+func (h *ProxyHandler) StartHealthChecks(ctx context.Context, servers []string, interval time.Duration) {
+	h.loadBalancer.StartHealthChecks(ctx, interval)
 }

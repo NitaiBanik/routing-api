@@ -16,9 +16,20 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
 
-	handler := NewProxyHandler(cfg.ApplicationAPIs, cfg.BalancerType)
+	retryConfig := RetryConfig{
+		MaxAttempts: cfg.MaxRetries,
+		Delay:       cfg.RetryDelay,
+	}
+	circuitConfig := CircuitBreakerConfig{
+		MaxFailures:  cfg.MaxFailures,
+		ResetTimeout: cfg.ResetTimeout,
+	}
+	handler := NewProxyHandler(cfg.ApplicationAPIs, cfg.BalancerType, retryConfig, circuitConfig)
 
 	router := mux.NewRouter()
 
@@ -28,9 +39,17 @@ func main() {
 	router.PathPrefix("/").HandlerFunc(handler.ProxyRequest)
 
 	server := &http.Server{
-		Addr:    ":" + cfg.Port,
-		Handler: router,
+		Addr:         ":" + cfg.Port,
+		Handler:      router,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go handler.StartHealthChecks(ctx, cfg.ApplicationAPIs, cfg.HealthCheckInterval)
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -42,10 +61,12 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
 		log.Fatal("forced shutdown:", err)
 	}
 }
