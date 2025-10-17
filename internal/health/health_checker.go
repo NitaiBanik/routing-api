@@ -5,6 +5,10 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"routing-api/internal/logger"
+
+	"go.uber.org/zap"
 )
 
 type HealthChecker interface {
@@ -13,11 +17,13 @@ type HealthChecker interface {
 
 type httpHealthChecker struct {
 	checkPath string
+	logger    logger.Logger
 }
 
-func NewHTTPHealthChecker() *httpHealthChecker {
+func NewHTTPHealthChecker(logger logger.Logger) *httpHealthChecker {
 	return &httpHealthChecker{
 		checkPath: "/health",
+		logger:    logger,
 	}
 }
 
@@ -63,6 +69,10 @@ func (h *httpHealthChecker) checkClient(client HTTPClient) {
 	if defaultClient, ok := client.(*DefaultHTTPClient); ok {
 		req, err := http.NewRequest("GET", defaultClient.BaseURL+h.checkPath, nil)
 		if err != nil {
+			h.logger.Error("Failed to create health check request",
+				zap.String("url", defaultClient.BaseURL+h.checkPath),
+				zap.Error(err),
+			)
 			client.SetUp(false)
 			return
 		}
@@ -73,11 +83,23 @@ func (h *httpHealthChecker) checkClient(client HTTPClient) {
 
 		resp, err := defaultClient.Client.Do(req)
 		if err != nil {
+			h.logger.Warn("Health check failed",
+				zap.String("url", defaultClient.BaseURL+h.checkPath),
+				zap.Error(err),
+			)
 			client.SetUp(false)
 			return
 		}
 		defer resp.Body.Close()
 
-		client.SetUp(resp.StatusCode == http.StatusOK)
+		isHealthy := resp.StatusCode == http.StatusOK
+		client.SetUp(isHealthy)
+		
+		if !isHealthy {
+			h.logger.Warn("Health check returned non-OK status",
+				zap.String("url", defaultClient.BaseURL+h.checkPath),
+				zap.Int("status", resp.StatusCode),
+			)
+		}
 	}
 }

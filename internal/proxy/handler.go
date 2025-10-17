@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"routing-api/internal/loadbalancer"
+	"routing-api/internal/logger"
+
+	"go.uber.org/zap"
 )
 
 type HealthResponse struct {
@@ -17,11 +19,13 @@ type HealthResponse struct {
 
 type ProxyHandler struct {
 	clientProvider loadbalancer.ClientProvider
+	logger         logger.Logger
 }
 
-func NewProxyHandler(clientProvider loadbalancer.ClientProvider) *ProxyHandler {
+func NewProxyHandler(clientProvider loadbalancer.ClientProvider, logger logger.Logger) *ProxyHandler {
 	return &ProxyHandler{
 		clientProvider: clientProvider,
+		logger:         logger,
 	}
 }
 
@@ -32,28 +36,34 @@ func (h *ProxyHandler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
+	log := h.logger
+
 	client := h.clientProvider.GetClient()
 	if client == nil {
+		log.Error("No servers configured")
 		http.Error(w, "no servers configured", http.StatusInternalServerError)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
-	defer cancel()
-
-	reqWithTimeout := req.WithContext(ctx)
-
-	resp, err := client.Do(reqWithTimeout)
+	resp, err := client.Do(req)
 	if err != nil {
-		// Check if it's a timeout error
-		if ctx.Err() == context.DeadlineExceeded {
-			http.Error(w, "request timeout", http.StatusGatewayTimeout)
-		} else {
-			http.Error(w, "cannot reach server", http.StatusBadGateway)
-		}
+		log.Error("Cannot reach server",
+			zap.String("method", req.Method),
+			zap.String("path", req.URL.Path),
+			zap.Error(err),
+		)
+		http.Error(w, "cannot reach server", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
+
+	backendURL := client.GetBaseURL()
+	log.Info("ROUTING-API-BACKEND",
+		zap.String("method", req.Method),
+		zap.String("backend_url", backendURL),
+		zap.String("path", req.URL.Path),
+		zap.Int("status", resp.StatusCode),
+	)
 
 	for key, values := range resp.Header {
 		for _, value := range values {
@@ -64,7 +74,11 @@ func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
-		log.Printf("Error copying response body: %v", err)
+		log.Error("Error copying response body",
+			zap.String("method", req.Method),
+			zap.String("path", req.URL.Path),
+			zap.Error(err),
+		)
 	}
 }
 

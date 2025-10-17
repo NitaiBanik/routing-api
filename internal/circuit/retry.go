@@ -78,7 +78,6 @@ func (rc *RetryableClient) IsUp() bool {
 }
 
 func (rc *RetryableClient) SetUp(isUp bool) {
-	// Circuit breaker manages its own state
 }
 
 func (rc *RetryableClient) GetBaseURL() string {

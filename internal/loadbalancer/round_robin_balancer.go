@@ -2,11 +2,13 @@ package loadbalancer
 
 import (
 	"context"
+	"net/http"
 	"sync"
 	"time"
 
 	"routing-api/internal/circuit"
 	"routing-api/internal/health"
+	"routing-api/internal/logger"
 )
 
 type roundRobinLoadBalancer struct {
@@ -14,34 +16,35 @@ type roundRobinLoadBalancer struct {
 	availableClients []health.HTTPClient
 	currentIndex     int
 	mutex            sync.RWMutex
+	logger           logger.Logger
 }
 
 func (r *roundRobinLoadBalancer) Next() health.HTTPClient {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	if len(r.availableClients) == 0 {
 		return nil
 	}
 
-	client := r.availableClients[r.currentIndex%len(r.availableClients)]
+	client := r.availableClients[r.currentIndex]
 	r.currentIndex = (r.currentIndex + 1) % len(r.availableClients)
 	return client
 }
 
-func newRoundRobinLoadBalancer(config LoadBalancerConfig) *roundRobinLoadBalancer {
-	clients := make([]health.HTTPClient, len(config.Servers))
-	availableClients := make([]health.HTTPClient, len(config.Servers))
+func newRoundRobinLoadBalancer(servers []string, retryConfig circuit.RetryConfig, circuitConfig circuit.CircuitBreakerConfig, logger logger.Logger) *roundRobinLoadBalancer {
+	clients := make([]health.HTTPClient, len(servers))
+	availableClients := make([]health.HTTPClient, len(servers))
 
-	for i, serverURL := range config.Servers {
-		baseClient := health.NewDefaultHTTPClient(serverURL, config.RequestTimeout, config.ConnectTimeout)
-		circuitBreaker := circuit.NewCircuitBreakerWithSlowThreshold(
-			config.CircuitConfig.MaxFailures,
-			config.CircuitConfig.ResetTimeout,
-			config.SlowThreshold,
-			config.MaxSlowCount,
-		)
-		retryableClient := circuit.NewRetryableClientWithCircuitBreaker(baseClient, config.RetryConfig, circuitBreaker)
+	for i, serverURL := range servers {
+		baseClient := &health.DefaultHTTPClient{
+			Client: &http.Client{
+				Timeout: 30 * time.Second,
+			},
+			BaseURL: serverURL,
+			Up:      true,
+		}
+		retryableClient := circuit.NewRetryableClient(baseClient, retryConfig, circuitConfig)
 		clients[i] = retryableClient
 		availableClients[i] = retryableClient
 	}
@@ -49,11 +52,12 @@ func newRoundRobinLoadBalancer(config LoadBalancerConfig) *roundRobinLoadBalance
 	return &roundRobinLoadBalancer{
 		clients:          clients,
 		availableClients: availableClients,
+		logger:           logger,
 	}
 }
 
 func (r *roundRobinLoadBalancer) StartHealthChecks(ctx context.Context, interval time.Duration) {
-	healthChecker := health.NewHTTPHealthChecker()
+	healthChecker := health.NewHTTPHealthChecker(r.logger)
 	go healthChecker.Start(ctx, r.clients, interval, r.updateAvailableClients)
 }
 

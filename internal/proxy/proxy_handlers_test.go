@@ -14,6 +14,7 @@ import (
 	"routing-api/internal/circuit"
 	"routing-api/internal/health"
 	"routing-api/internal/loadbalancer"
+	"routing-api/internal/logger"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -25,19 +26,9 @@ func TestHealthHandler(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	loadBalancerConfig := loadbalancer.LoadBalancerConfig{
-		BalancerType:   "round-robin",
-		Servers:        []string{"http://localhost:8080"},
-		RetryConfig:    retryConfig,
-		CircuitConfig:  circuitConfig,
-		RequestTimeout: 30 * time.Second,
-		ConnectTimeout: 5 * time.Second,
-		SlowThreshold: 10 * time.Second,
-		MaxSlowCount:  10,
-	}
-	loadBalancer := factory.CreateLoadBalancer(loadBalancerConfig)
+	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, retryConfig, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
-	handler := NewProxyHandler(clientProvider)
+	handler := NewProxyHandler(clientProvider, logger.NewTestLogger())
 
 	tests := []struct {
 		name           string
@@ -70,7 +61,7 @@ func TestHealthHandler(t *testing.T) {
 
 func TestProxyRequest(t *testing.T) {
 	mockProvider := &MockClientProvider{client: nil}
-	handler := NewProxyHandler(mockProvider)
+	handler := NewProxyHandler(mockProvider, logger.NewTestLogger())
 
 	tests := []struct {
 		name           string
@@ -157,19 +148,9 @@ func TestRoundRobinDistribution(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	loadBalancerConfig := loadbalancer.LoadBalancerConfig{
-		BalancerType:   "round-robin",
-		Servers:        []string{server1.URL, server2.URL},
-		RetryConfig:    retryConfig,
-		CircuitConfig:  circuitConfig,
-		RequestTimeout: 30 * time.Second,
-		ConnectTimeout: 5 * time.Second,
-		SlowThreshold: 10 * time.Second,
-		MaxSlowCount:  10,
-	}
-	balancer := factory.CreateLoadBalancer(loadBalancerConfig)
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
-	handler := NewProxyHandler(clientProvider)
+	handler := NewProxyHandler(clientProvider, logger.NewTestLogger())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -256,23 +237,13 @@ func TestLoadBalancerFactory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			loadBalancerConfig := loadbalancer.LoadBalancerConfig{
-				BalancerType:   tt.balancerType,
-				Servers:        servers,
-				RetryConfig:    retryConfig,
-				CircuitConfig:  circuitConfig,
-				RequestTimeout: 30 * time.Second,
-				ConnectTimeout: 5 * time.Second,
-			}
-			balancer := factory.CreateLoadBalancer(loadBalancerConfig)
+			balancer := factory.CreateLoadBalancer(tt.balancerType, servers, retryConfig, circuitConfig, logger.NewTestLogger())
 			assert.NotNil(t, balancer)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go balancer.StartHealthChecks(ctx, 100*time.Millisecond)
 			time.Sleep(200 * time.Millisecond)
-
-			// Test that it returns clients in round-robin fashion
 			first := balancer.Next()
 			second := balancer.Next()
 			third := balancer.Next()

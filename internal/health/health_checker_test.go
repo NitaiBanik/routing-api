@@ -7,11 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"routing-api/internal/logger"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHTTPHealthChecker_CheckClient(t *testing.T) {
-	healthChecker := NewHTTPHealthChecker()
+	healthChecker := NewHTTPHealthChecker(logger.NewTestLogger())
 
 	tests := []struct {
 		name           string
@@ -71,7 +73,7 @@ func TestHTTPHealthChecker_CheckClient(t *testing.T) {
 }
 
 func TestHTTPHealthChecker_CheckAllClients(t *testing.T) {
-	healthChecker := NewHTTPHealthChecker()
+	healthChecker := NewHTTPHealthChecker(logger.NewTestLogger())
 	healthChanged := false
 	onHealthChange := func() {
 		healthChanged = true
@@ -108,7 +110,7 @@ func TestHTTPHealthChecker_CheckAllClients(t *testing.T) {
 }
 
 func TestHTTPHealthChecker_Start(t *testing.T) {
-	healthChecker := NewHTTPHealthChecker()
+	healthChecker := NewHTTPHealthChecker(logger.NewTestLogger())
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

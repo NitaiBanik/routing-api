@@ -43,15 +43,11 @@ func TestCircuitBreakerSuccess(t *testing.T) {
 func TestCircuitBreakerHalfOpen(t *testing.T) {
 	cb := NewCircuitBreaker(2, 50*time.Millisecond)
 
-	// Trigger circuit breaker to open
 	cb.Execute(func() error { return errors.New("error 1") })
 	cb.Execute(func() error { return errors.New("error 2") })
 	assert.Equal(t, StateOpen, cb.GetState())
 
-	// Wait for reset timeout
 	time.Sleep(60 * time.Millisecond)
-
-	// First call should transition to Half-Open and succeed
 	err := cb.Execute(func() error {
 		return nil
 	})

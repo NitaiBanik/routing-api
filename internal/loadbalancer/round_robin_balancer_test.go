@@ -3,33 +3,22 @@ package loadbalancer
 import (
 	"net/http"
 	"net/http/httptest"
-	"routing-api/internal/circuit"
 	"testing"
 	"time"
+
+	"routing-api/internal/circuit"
+	"routing-api/internal/logger"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func createTestLoadBalancer(servers []string) *roundRobinLoadBalancer {
+func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
 	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
-	config := LoadBalancerConfig{
-		BalancerType:   "round-robin",
-		Servers:        servers,
-		RetryConfig:    retryConfig,
-		CircuitConfig:  circuitConfig,
-		RequestTimeout: 30 * time.Second,
-		ConnectTimeout: 5 * time.Second,
-		SlowThreshold:  10 * time.Second,
-		MaxSlowCount:   10,
-	}
-	return newRoundRobinLoadBalancer(config)
-}
 
-func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -40,12 +29,18 @@ func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := createTestLoadBalancer([]string{server1.URL, server2.URL})
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
 	assert.Equal(t, 2, len(balancer.availableClients))
 }
 
 func TestRoundRobinLoadBalancer_AllClientsDown(t *testing.T) {
-	balancer := createTestLoadBalancer([]string{"http://localhost:8080", "http://localhost:8081"})
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
+
+	balancer := newRoundRobinLoadBalancer([]string{"http://localhost:8080", "http://localhost:8081"}, retryConfig, circuitConfig, logger.NewTestLogger())
 	assert.Equal(t, 2, len(balancer.availableClients))
 
 	client := balancer.Next()
@@ -53,6 +48,11 @@ func TestRoundRobinLoadBalancer_AllClientsDown(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
 
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -64,9 +64,8 @@ func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := createTestLoadBalancer([]string{server1.URL, server2.URL})
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
 
-	// Test round robin distribution
 	client1 := balancer.Next()
 	client2 := balancer.Next()
 	client3 := balancer.Next()
@@ -81,6 +80,11 @@ func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
 
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -92,7 +96,7 @@ func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := createTestLoadBalancer([]string{server1.URL, server2.URL})
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
 	balancer.currentIndex = 1
 	balancer.updateAvailableClients()
 
@@ -100,15 +104,19 @@ func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_ConcurrentAccess(t *testing.T) {
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	balancer := createTestLoadBalancer([]string{server.URL})
+	balancer := newRoundRobinLoadBalancer([]string{server.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
 
-	// Test concurrent access to Next() and updateAvailableClients()
 	done := make(chan bool, 2)
 
 	go func() {
