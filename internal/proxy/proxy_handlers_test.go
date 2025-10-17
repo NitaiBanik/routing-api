@@ -25,7 +25,17 @@ func TestHealthHandler(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, retryConfig, circuitConfig)
+	loadBalancerConfig := loadbalancer.LoadBalancerConfig{
+		BalancerType:   "round-robin",
+		Servers:        []string{"http://localhost:8080"},
+		RetryConfig:    retryConfig,
+		CircuitConfig:  circuitConfig,
+		RequestTimeout: 30 * time.Second,
+		ConnectTimeout: 5 * time.Second,
+		SlowThreshold: 10 * time.Second,
+		MaxSlowCount:  10,
+	}
+	loadBalancer := factory.CreateLoadBalancer(loadBalancerConfig)
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
 	handler := NewProxyHandler(clientProvider)
 
@@ -147,15 +157,24 @@ func TestRoundRobinDistribution(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, retryConfig, circuitConfig)
+	loadBalancerConfig := loadbalancer.LoadBalancerConfig{
+		BalancerType:   "round-robin",
+		Servers:        []string{server1.URL, server2.URL},
+		RetryConfig:    retryConfig,
+		CircuitConfig:  circuitConfig,
+		RequestTimeout: 30 * time.Second,
+		ConnectTimeout: 5 * time.Second,
+		SlowThreshold: 10 * time.Second,
+		MaxSlowCount:  10,
+	}
+	balancer := factory.CreateLoadBalancer(loadBalancerConfig)
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := NewProxyHandler(clientProvider)
 
-	// Start health checker and wait a bit for initial health checks
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go handler.StartHealthChecks(ctx, 100*time.Millisecond)
-	time.Sleep(200 * time.Millisecond) // Wait for health checks to complete
+	time.Sleep(200 * time.Millisecond)
 
 	tests := []struct {
 		name          string
@@ -201,7 +220,6 @@ func TestLoadBalancerFactory(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 
-	// Create test servers with health endpoints
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			w.WriteHeader(http.StatusOK)
@@ -238,10 +256,17 @@ func TestLoadBalancerFactory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			balancer := factory.CreateLoadBalancer(tt.balancerType, servers, retryConfig, circuitConfig)
+			loadBalancerConfig := loadbalancer.LoadBalancerConfig{
+				BalancerType:   tt.balancerType,
+				Servers:        servers,
+				RetryConfig:    retryConfig,
+				CircuitConfig:  circuitConfig,
+				RequestTimeout: 30 * time.Second,
+				ConnectTimeout: 5 * time.Second,
+			}
+			balancer := factory.CreateLoadBalancer(loadBalancerConfig)
 			assert.NotNil(t, balancer)
 
-			// Start health checker and wait for initial checks
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			go balancer.StartHealthChecks(ctx, 100*time.Millisecond)

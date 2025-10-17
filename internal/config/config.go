@@ -23,10 +23,17 @@ type Config struct {
 	MaxFailures    int
 	CircuitTimeout time.Duration
 	ResetTimeout   time.Duration
+	SlowThreshold  time.Duration
+	MaxSlowCount   int
 
 	// Retry Config
 	MaxRetries int
 	RetryDelay time.Duration
+
+	// HTTP Client Timeouts
+	RequestTimeout  time.Duration
+	ConnectTimeout  time.Duration
+	ResponseTimeout time.Duration
 }
 
 func Load() (*Config, error) {
@@ -66,9 +73,15 @@ func LoadWithDefaults(useDefaults bool) (*Config, error) {
 		MaxFailures:    maxFailures,
 		CircuitTimeout: getEnvDuration("CIRCUIT_TIMEOUT", "30s"),
 		ResetTimeout:   getEnvDuration("RESET_TIMEOUT", "60s"),
+		SlowThreshold:  getEnvDuration("SLOW_THRESHOLD", "5s"),
+		MaxSlowCount:   getEnvInt("MAX_SLOW_COUNT", 3),
 
 		MaxRetries: maxRetries,
 		RetryDelay: getEnvDuration("RETRY_DELAY", "100ms"),
+
+		RequestTimeout:  getEnvDuration("REQUEST_TIMEOUT", "30s"),
+		ConnectTimeout:  getEnvDuration("CONNECT_TIMEOUT", "5s"),
+		ResponseTimeout: getEnvDuration("RESPONSE_TIMEOUT", "25s"),
 	}
 
 	if err := config.Validate(); err != nil {

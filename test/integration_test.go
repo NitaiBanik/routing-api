@@ -16,6 +16,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func createTestLoadBalancer(servers []string) loadbalancer.LoadBalancer {
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
+	config := loadbalancer.LoadBalancerConfig{
+		BalancerType:   "round-robin",
+		Servers:        servers,
+		RetryConfig:    retryConfig,
+		CircuitConfig:  circuitConfig,
+		RequestTimeout: 30 * time.Second,
+		ConnectTimeout: 5 * time.Second,
+		SlowThreshold: 10 * time.Second,
+		MaxSlowCount:  10,
+	}
+	factory := loadbalancer.NewLoadBalancerFactory()
+	return factory.CreateLoadBalancer(config)
+}
+
 func TestIntegration_LoadBalancingWithFailures(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -29,14 +49,7 @@ func TestIntegration_LoadBalancingWithFailures(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	retryConfig := circuit.DefaultRetryConfig()
-	circuitConfig := circuit.CircuitBreakerConfig{
-		MaxFailures:  2,
-		ResetTimeout: 100 * time.Millisecond,
-	}
-
-	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, retryConfig, circuitConfig)
+	balancer := createTestLoadBalancer([]string{server1.URL, server2.URL})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider)
 
@@ -76,18 +89,10 @@ func TestIntegration_HealthCheckIntegration(t *testing.T) {
 	}))
 	defer unhealthyServer.Close()
 
-	retryConfig := circuit.DefaultRetryConfig()
-	circuitConfig := circuit.CircuitBreakerConfig{
-		MaxFailures:  2,
-		ResetTimeout: 100 * time.Millisecond,
-	}
-
-	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{healthyServer.URL, unhealthyServer.URL}, retryConfig, circuitConfig)
+	balancer := createTestLoadBalancer([]string{healthyServer.URL, unhealthyServer.URL})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider)
 
-	// Start health checks
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	go handler.StartHealthChecks(ctx, 50*time.Millisecond)
@@ -120,7 +125,6 @@ func TestIntegration_HealthCheckIntegration(t *testing.T) {
 }
 
 func TestIntegration_CircuitBreakerWithRetry(t *testing.T) {
-	// Create a server that returns HTTP 500 (no retry for HTTP errors)
 	attemptCount := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attemptCount++
@@ -129,17 +133,7 @@ func TestIntegration_CircuitBreakerWithRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	retryConfig := circuit.RetryConfig{
-		MaxAttempts: 3,
-		Delay:       10 * time.Millisecond,
-	}
-	circuitConfig := circuit.CircuitBreakerConfig{
-		MaxFailures:  5,
-		ResetTimeout: 100 * time.Millisecond,
-	}
-
-	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, retryConfig, circuitConfig)
+	balancer := createTestLoadBalancer([]string{server.URL})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider)
 
@@ -155,18 +149,11 @@ func TestIntegration_CircuitBreakerWithRetry(t *testing.T) {
 }
 
 func TestIntegration_AllBackendsDown(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
-	circuitConfig := circuit.CircuitBreakerConfig{
-		MaxFailures:  2,
-		ResetTimeout: 100 * time.Millisecond,
-	}
 
-	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{"http://invalid1:9999", "http://invalid2:9999"}, retryConfig, circuitConfig)
+	balancer := createTestLoadBalancer([]string{"http://invalid1:9999", "http://invalid2:9999"})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider)
 
-	// Start health checks
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	go handler.StartHealthChecks(ctx, 50*time.Millisecond)
@@ -204,14 +191,7 @@ func TestIntegration_JSONRequestForwarding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	retryConfig := circuit.DefaultRetryConfig()
-	circuitConfig := circuit.CircuitBreakerConfig{
-		MaxFailures:  2,
-		ResetTimeout: 100 * time.Millisecond,
-	}
-
-	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, retryConfig, circuitConfig)
+	balancer := createTestLoadBalancer([]string{server.URL})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider)
 

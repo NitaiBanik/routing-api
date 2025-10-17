@@ -24,17 +24,25 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	retryConfig := circuit.RetryConfig{
-		MaxAttempts: cfg.MaxRetries,
-		Delay:       cfg.RetryDelay,
-	}
-	circuitConfig := circuit.CircuitBreakerConfig{
-		MaxFailures:  cfg.MaxFailures,
-		ResetTimeout: cfg.ResetTimeout,
+	loadBalancerConfig := loadbalancer.LoadBalancerConfig{
+		BalancerType: cfg.BalancerType,
+		Servers:      cfg.ApplicationAPIs,
+		RetryConfig: circuit.RetryConfig{
+			MaxAttempts: cfg.MaxRetries,
+			Delay:       cfg.RetryDelay,
+		},
+		CircuitConfig: circuit.CircuitBreakerConfig{
+			MaxFailures:  cfg.MaxFailures,
+			ResetTimeout: cfg.ResetTimeout,
+		},
+		RequestTimeout: cfg.RequestTimeout,
+		ConnectTimeout: cfg.ConnectTimeout,
+		SlowThreshold:  cfg.SlowThreshold,
+		MaxSlowCount:   cfg.MaxSlowCount,
 	}
 
 	loadBalancerFactory := loadbalancer.NewLoadBalancerFactory()
-	loadBalancer := loadBalancerFactory.CreateLoadBalancer(cfg.BalancerType, cfg.ApplicationAPIs, retryConfig, circuitConfig)
+	loadBalancer := loadBalancerFactory.CreateLoadBalancer(loadBalancerConfig)
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
 	handler := proxy.NewProxyHandler(clientProvider)
 

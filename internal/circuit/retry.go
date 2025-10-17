@@ -33,6 +33,14 @@ func NewRetryableClient(client health.HTTPClient, retryConfig RetryConfig, circu
 	}
 }
 
+func NewRetryableClientWithCircuitBreaker(client health.HTTPClient, retryConfig RetryConfig, circuitBreaker *CircuitBreaker) *RetryableClient {
+	return &RetryableClient{
+		client:         client,
+		config:         retryConfig,
+		circuitBreaker: circuitBreaker,
+	}
+}
+
 func (rc *RetryableClient) Do(req *http.Request) (*http.Response, error) {
 	var lastErr error
 

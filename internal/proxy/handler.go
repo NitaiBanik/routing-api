@@ -38,9 +38,19 @@ func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	resp, err := client.Do(req)
+	ctx, cancel := context.WithTimeout(req.Context(), 30*time.Second)
+	defer cancel()
+
+	reqWithTimeout := req.WithContext(ctx)
+
+	resp, err := client.Do(reqWithTimeout)
 	if err != nil {
-		http.Error(w, "cannot reach server", http.StatusBadGateway)
+		// Check if it's a timeout error
+		if ctx.Err() == context.DeadlineExceeded {
+			http.Error(w, "request timeout", http.StatusGatewayTimeout)
+		} else {
+			http.Error(w, "cannot reach server", http.StatusBadGateway)
+		}
 		return
 	}
 	defer resp.Body.Close()
