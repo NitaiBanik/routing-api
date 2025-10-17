@@ -10,10 +10,21 @@ import (
 	"routing-api/internal/logger"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
+type testLogger struct{}
+
+func (l *testLogger) Debug(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Info(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Warn(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Error(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Fatal(msg string, fields ...zap.Field)  {}
+func (l *testLogger) With(fields ...zap.Field) logger.Logger { return l }
+func (l *testLogger) Sync() error                            { return nil }
+
 func TestHTTPHealthChecker_CheckClient(t *testing.T) {
-	healthChecker := NewHTTPHealthChecker(logger.NewTestLogger())
+	healthChecker := NewHTTPHealthChecker(&testLogger{})
 
 	tests := []struct {
 		name           string
@@ -73,7 +84,7 @@ func TestHTTPHealthChecker_CheckClient(t *testing.T) {
 }
 
 func TestHTTPHealthChecker_CheckAllClients(t *testing.T) {
-	healthChecker := NewHTTPHealthChecker(logger.NewTestLogger())
+	healthChecker := NewHTTPHealthChecker(&testLogger{})
 	healthChanged := false
 	onHealthChange := func() {
 		healthChanged = true
@@ -110,7 +121,7 @@ func TestHTTPHealthChecker_CheckAllClients(t *testing.T) {
 }
 
 func TestHTTPHealthChecker_Start(t *testing.T) {
-	healthChecker := NewHTTPHealthChecker(logger.NewTestLogger())
+	healthChecker := NewHTTPHealthChecker(&testLogger{})
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

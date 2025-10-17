@@ -15,7 +15,18 @@ import (
 	"routing-api/internal/proxy"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
+
+type testLogger struct{}
+
+func (l *testLogger) Debug(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Info(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Warn(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Error(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Fatal(msg string, fields ...zap.Field)  {}
+func (l *testLogger) With(fields ...zap.Field) logger.Logger { return l }
+func (l *testLogger) Sync() error                            { return nil }
 
 func TestIntegration_LoadBalancingWithFailures(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,9 +47,9 @@ func TestIntegration_LoadBalancingWithFailures(t *testing.T) {
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, circuitConfig, &testLogger{})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
-	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
+	handler := proxy.NewProxyHandler(clientProvider, &testLogger{})
 
 	responses := make(map[string]int)
 	for i := 0; i < 10; i++ {
@@ -82,9 +93,9 @@ func TestIntegration_HealthCheckIntegration(t *testing.T) {
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{healthyServer.URL, unhealthyServer.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{healthyServer.URL, unhealthyServer.URL}, circuitConfig, &testLogger{})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
-	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
+	handler := proxy.NewProxyHandler(clientProvider, &testLogger{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -128,9 +139,9 @@ func TestIntegration_CircuitBreakerWithRetry(t *testing.T) {
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, circuitConfig, &testLogger{})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
-	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
+	handler := proxy.NewProxyHandler(clientProvider, &testLogger{})
 
 	// HTTP 500 errors are not retried, so only 1 attempt
 	req, _ := http.NewRequest("GET", "/test", nil)
@@ -150,9 +161,9 @@ func TestIntegration_AllBackendsDown(t *testing.T) {
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{"http://invalid1:9999", "http://invalid2:9999"}, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{"http://invalid1:9999", "http://invalid2:9999"}, circuitConfig, &testLogger{})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
-	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
+	handler := proxy.NewProxyHandler(clientProvider, &testLogger{})
 
 	// Start health checks
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -196,9 +207,9 @@ func TestIntegration_JSONRequestForwarding(t *testing.T) {
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, circuitConfig, &testLogger{})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
-	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
+	handler := proxy.NewProxyHandler(clientProvider, &testLogger{})
 
 	// Send JSON request
 	requestData := map[string]interface{}{

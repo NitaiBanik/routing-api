@@ -17,7 +17,18 @@ import (
 	"routing-api/internal/logger"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
+
+type testLogger struct{}
+
+func (l *testLogger) Debug(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Info(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Warn(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Error(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Fatal(msg string, fields ...zap.Field)  {}
+func (l *testLogger) With(fields ...zap.Field) logger.Logger { return l }
+func (l *testLogger) Sync() error                            { return nil }
 
 func TestHealthHandler(t *testing.T) {
 	circuitConfig := circuit.CircuitBreakerConfig{
@@ -25,9 +36,9 @@ func TestHealthHandler(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, circuitConfig, logger.NewTestLogger())
+	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, circuitConfig, &testLogger{})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
-	handler := NewProxyHandler(clientProvider, logger.NewTestLogger())
+	handler := NewProxyHandler(clientProvider, &testLogger{})
 
 	tests := []struct {
 		name           string
@@ -60,7 +71,7 @@ func TestHealthHandler(t *testing.T) {
 
 func TestProxyRequest(t *testing.T) {
 	mockProvider := &MockClientProvider{client: nil}
-	handler := NewProxyHandler(mockProvider, logger.NewTestLogger())
+	handler := NewProxyHandler(mockProvider, &testLogger{})
 
 	tests := []struct {
 		name           string
@@ -146,9 +157,9 @@ func TestRoundRobinDistribution(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, circuitConfig, &testLogger{})
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
-	handler := NewProxyHandler(clientProvider, logger.NewTestLogger())
+	handler := NewProxyHandler(clientProvider, &testLogger{})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -234,7 +245,7 @@ func TestLoadBalancerFactory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			balancer := factory.CreateLoadBalancer(tt.balancerType, servers, circuitConfig, logger.NewTestLogger())
+			balancer := factory.CreateLoadBalancer(tt.balancerType, servers, circuitConfig, &testLogger{})
 			assert.NotNil(t, balancer)
 
 			ctx, cancel := context.WithCancel(context.Background())

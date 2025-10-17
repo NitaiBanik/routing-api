@@ -10,7 +10,18 @@ import (
 	"routing-api/internal/logger"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
+
+type testLogger struct{}
+
+func (l *testLogger) Debug(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Info(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Warn(msg string, fields ...zap.Field)   {}
+func (l *testLogger) Error(msg string, fields ...zap.Field)  {}
+func (l *testLogger) Fatal(msg string, fields ...zap.Field)  {}
+func (l *testLogger) With(fields ...zap.Field) logger.Logger { return l }
+func (l *testLogger) Sync() error                            { return nil }
 
 func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
 	circuitConfig := circuit.CircuitBreakerConfig{
@@ -28,7 +39,7 @@ func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, &testLogger{})
 	assert.Equal(t, 2, len(balancer.availableClients))
 }
 
@@ -38,7 +49,7 @@ func TestRoundRobinLoadBalancer_AllClientsDown(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 
-	balancer := newRoundRobinLoadBalancer([]string{"http://localhost:8080", "http://localhost:8081"}, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{"http://localhost:8080", "http://localhost:8081"}, circuitConfig, &testLogger{})
 	assert.Equal(t, 2, len(balancer.availableClients))
 
 	client := balancer.Next()
@@ -61,7 +72,7 @@ func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, &testLogger{})
 
 	client1 := balancer.Next()
 	client2 := balancer.Next()
@@ -92,7 +103,7 @@ func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, &testLogger{})
 	balancer.currentIndex = 1
 	balancer.updateAvailableClients()
 
@@ -110,7 +121,7 @@ func TestRoundRobinLoadBalancer_ConcurrentAccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server.URL}, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server.URL}, circuitConfig, &testLogger{})
 
 	done := make(chan bool, 2)
 
