@@ -6,4 +6,4 @@ sleep 1
 
 # Start the routing API
 echo "Starting routing API on port 3000..."
-go run main.go
+go run cmd/server/main.go

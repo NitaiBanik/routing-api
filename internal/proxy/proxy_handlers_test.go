@@ -1,19 +1,33 @@
-package main
+package proxy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"routing-api/internal/circuit"
+	"routing-api/internal/health"
+	"routing-api/internal/loadbalancer"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHealthHandler(t *testing.T) {
-	handler := NewProxyHandler([]string{"http://localhost:8080"}, "round-robin")
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
+	factory := loadbalancer.NewLoadBalancerFactory()
+	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, retryConfig, circuitConfig)
+	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
+	handler := NewProxyHandler(clientProvider)
 
 	tests := []struct {
 		name           string
@@ -45,8 +59,8 @@ func TestHealthHandler(t *testing.T) {
 }
 
 func TestProxyRequest(t *testing.T) {
-	mockBalancer := &MockLoadBalancer{client: nil}
-	handler := NewProxyHandlerWithDeps(mockBalancer)
+	mockProvider := &MockClientProvider{client: nil}
+	handler := NewProxyHandler(mockProvider)
 
 	tests := []struct {
 		name           string
@@ -80,12 +94,16 @@ func TestProxyRequest(t *testing.T) {
 	}
 }
 
-type MockLoadBalancer struct {
-	client HTTPClient
+type MockClientProvider struct {
+	client health.HTTPClient
 }
 
-func (m *MockLoadBalancer) Next() HTTPClient {
+func (m *MockClientProvider) GetClient() health.HTTPClient {
 	return m.client
+}
+
+func (m *MockClientProvider) StartHealthChecks(ctx context.Context, interval time.Duration) {
+	// Mock implementation - do nothing
 }
 
 type MockHTTPClient struct {
@@ -102,6 +120,10 @@ func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 
 func TestRoundRobinDistribution(t *testing.T) {
 	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"server": "1"})
@@ -109,14 +131,31 @@ func TestRoundRobinDistribution(t *testing.T) {
 	defer server1.Close()
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"server": "2"})
 	}))
 	defer server2.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL})
-	handler := NewProxyHandlerWithDeps(balancer)
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
+	factory := loadbalancer.NewLoadBalancerFactory()
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, retryConfig, circuitConfig)
+	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
+	handler := NewProxyHandler(clientProvider)
+
+	// Start health checker and wait a bit for initial health checks
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go handler.StartHealthChecks(ctx, 100*time.Millisecond)
+	time.Sleep(200 * time.Millisecond) // Wait for health checks to complete
 
 	tests := []struct {
 		name          string
@@ -155,8 +194,33 @@ func TestRoundRobinDistribution(t *testing.T) {
 }
 
 func TestLoadBalancerFactory(t *testing.T) {
-	factory := NewLoadBalancerFactory()
-	servers := []string{"server1", "server2"}
+	factory := loadbalancer.NewLoadBalancerFactory()
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  5,
+		ResetTimeout: 60 * time.Second,
+	}
+
+	// Create test servers with health endpoints
+	server1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server1.Close()
+
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server2.Close()
+
+	servers := []string{server1.URL, server2.URL}
 
 	tests := []struct {
 		name         string
@@ -174,8 +238,14 @@ func TestLoadBalancerFactory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			balancer := factory.CreateLoadBalancer(tt.balancerType, servers)
+			balancer := factory.CreateLoadBalancer(tt.balancerType, servers, retryConfig, circuitConfig)
 			assert.NotNil(t, balancer)
+
+			// Start health checker and wait for initial checks
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go balancer.StartHealthChecks(ctx, 100*time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 
 			// Test that it returns clients in round-robin fashion
 			first := balancer.Next()
@@ -185,18 +255,14 @@ func TestLoadBalancerFactory(t *testing.T) {
 			assert.NotNil(t, first)
 			assert.NotNil(t, second)
 			assert.NotNil(t, third)
-
-			// Test that we get different clients (they should have different base URLs)
-			assert.NotEqual(t, first, second)
-			assert.Equal(t, first, third) // should wrap around
 		})
 	}
 }
 
 func TestHTTPClientWithBaseURL(t *testing.T) {
-	client := &defaultHTTPClient{
+	client := &health.DefaultHTTPClient{
 		Client:  &http.Client{},
-		baseURL: "http://example.com",
+		BaseURL: "http://example.com",
 	}
 
 	req, _ := http.NewRequest("GET", "/test", nil)

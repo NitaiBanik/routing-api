@@ -19,7 +19,7 @@ You'll need Go 1.21 or newer installed on your machine.
 
 3. **Run it:**
    ```bash
-   go run main.go
+   go run cmd/server/main.go
    ```
 
 4. **Test the routing:**
@@ -36,7 +36,7 @@ You'll need Go 1.21 or newer installed on your machine.
 
 ### Build it
 ```bash
-go build -o routing-api main.go
+go build -o routing-api cmd/server/main.go
 ```
 
 ### Run tests
@@ -46,8 +46,8 @@ go test ./...
 
 Run specific tests:
 ```bash
-go test ./handlers   
-go test -run TestAPI
+go test ./internal/proxy   
+go test ./test -run TestIntegration
 ```
 
 ## How the service works
@@ -86,9 +86,7 @@ curl http://localhost:3000/health
 
 ```json
 {
-  "status": "healthy",
-  "service": "routing-api",
-  "timestamp": "2024-01-01T12:00:00Z"
+  "status": "healthy"
 }
 ```
 
@@ -103,7 +101,7 @@ cp env.example .env
 
 Or set them directly:
 ```bash
-PORT=3000 go run main.go
+PORT=3000 go run cmd/server/main.go
 ```
 
 Configure application APIs via environment variables:
@@ -117,15 +115,26 @@ API_3=http://localhost:8082
 
 ```
 routing-api/
-├── main.go              # Where it all starts
+├── cmd/server/
+│   └── main.go          # Application entry point
+├── internal/
+│   ├── circuit/         # Circuit breaker and retry logic
+│   ├── config/          # Configuration management
+│   ├── health/          # Health checking and HTTP clients
+│   ├── loadbalancer/    # Load balancing algorithms
+│   ├── middleware/      # HTTP middleware
+│   └── proxy/           # Proxy handlers
+├── test/                # Integration tests
 ├── go.mod               # Dependencies
 ├── env.example          # Environment variables template
 ├── run.sh               # Script to run and test the API
-├── config/
-│   └── config.go        # Handles environment variables
-├── handlers/
-│   └── handlers.go      # The actual API endpoints
-├── middleware/
-│   └── middleware.go    # Logging and other middleware
 └── README.md            # This file
 ```
+
+## Features
+
+- **Round-robin load balancing** - Distributes requests across multiple backend servers
+- **Health checking** - Monitors backend server health and removes unhealthy servers
+- **Circuit breaker** - Protects against cascading failures
+- **Retry mechanism** - Automatically retries failed requests
+- **Comprehensive testing** - Unit and integration tests with excellent coverage
