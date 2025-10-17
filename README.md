@@ -72,9 +72,21 @@ To see the round-robin behavior in action, send multiple requests:
 curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 1, "message": "test 1"}'
 curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 2, "message": "test 2"}'
 curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 3, "message": "test 3"}'
+curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 4, "message": "test 4"}'
+curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 5, "message": "test 5"}'
+curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d '{"request_number": 6, "message": "test 6"}'
 ```
 
-Each request will be distributed to different application API instances in round-robin fashion.
+Or use a loop to send many requests quickly:
+
+```bash
+for i in {1..10}; do
+  curl -X POST http://localhost:3000/testapi -H "Content-Type: application/json" -d "{\"request_number\": $i, \"message\": \"test $i\"}"
+  echo
+done
+```
+
+Each request will be distributed to different application API instances in round-robin fashion. You'll see the backend URLs cycling through `http://localhost:8080`, `http://localhost:8081`, and `http://localhost:8082` in the routing API logs.
 
 ### GET /health
 
@@ -137,4 +149,3 @@ routing-api/
 - **Health checking** - Monitors backend server health and removes unhealthy servers
 - **Circuit breaker** - Protects against cascading failures
 - **Retry mechanism** - Automatically retries failed requests
-- **Comprehensive testing** - Unit and integration tests with excellent coverage
