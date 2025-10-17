@@ -19,15 +19,33 @@ type CircuitBreaker struct {
 	maxFailures     int
 	resetTimeout    time.Duration
 	lastFailureTime time.Time
+	slowThreshold   time.Duration
+	slowCount       int
+	maxSlowCount    int
 	mutex           sync.RWMutex
 }
 
 func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) *CircuitBreaker {
 	return &CircuitBreaker{
-		state:        StateClosed,
-		failureCount: 0,
-		maxFailures:  maxFailures,
-		resetTimeout: resetTimeout,
+		state:         StateClosed,
+		failureCount:  0,
+		maxFailures:   maxFailures,
+		resetTimeout:  resetTimeout,
+		slowThreshold: 5 * time.Second,
+		slowCount:     0,
+		maxSlowCount:  3,
+	}
+}
+
+func NewCircuitBreakerWithSlowThreshold(maxFailures int, resetTimeout time.Duration, slowThreshold time.Duration, maxSlowCount int) *CircuitBreaker {
+	return &CircuitBreaker{
+		state:         StateClosed,
+		failureCount:  0,
+		maxFailures:   maxFailures,
+		resetTimeout:  resetTimeout,
+		slowThreshold: slowThreshold,
+		slowCount:     0,
+		maxSlowCount:  maxSlowCount,
 	}
 }
 
@@ -46,19 +64,32 @@ func (cb *CircuitBreaker) Execute(operation func() error) error {
 	case StateHalfOpen:
 	}
 
+	startTime := time.Now()
 	err := operation()
+	responseTime := time.Since(startTime)
 
-	if err != nil {
+	isSlow := responseTime > cb.slowThreshold
+
+	if err != nil || isSlow {
 		cb.failureCount++
 		cb.lastFailureTime = time.Now()
 
-		if cb.state == StateHalfOpen || cb.failureCount >= cb.maxFailures {
+		if isSlow {
+			cb.slowCount++
+		}
+
+		if cb.state == StateHalfOpen || cb.failureCount >= cb.maxFailures || cb.slowCount >= cb.maxSlowCount {
 			cb.state = StateOpen
+		}
+		
+		if isSlow && err == nil {
+			return &CircuitBreakerError{Message: "response too slow"}
 		}
 		return err
 	}
 
 	cb.failureCount = 0
+	cb.slowCount = 0
 	cb.state = StateClosed
 	return nil
 }
@@ -74,6 +105,18 @@ func (cb *CircuitBreaker) GetState() CircuitBreakerState {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()
 	return cb.state
+}
+
+func (cb *CircuitBreaker) GetSlowCount() int {
+	cb.mutex.RLock()
+	defer cb.mutex.RUnlock()
+	return cb.slowCount
+}
+
+func (cb *CircuitBreaker) GetFailureCount() int {
+	cb.mutex.RLock()
+	defer cb.mutex.RUnlock()
+	return cb.failureCount
 }
 
 type CircuitBreakerError struct {
