@@ -26,13 +26,6 @@ func NewCircuitBreakerClient(client health.HTTPClient, circuitConfig CircuitBrea
 	}
 }
 
-func NewCircuitBreakerClientWithCircuitBreaker(client health.HTTPClient, circuitBreaker *CircuitBreaker) *CircuitBreakerClient {
-	return &CircuitBreakerClient{
-		client:         client,
-		circuitBreaker: circuitBreaker,
-	}
-}
-
 func (cbc *CircuitBreakerClient) Do(req *http.Request) (*http.Response, error) {
 	var resp *http.Response
 	err := cbc.circuitBreaker.Execute(func() error {
