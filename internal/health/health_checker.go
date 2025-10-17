@@ -71,44 +71,48 @@ func (h *httpHealthChecker) checkAllClients(clients []HTTPClient, onHealthChange
 }
 
 func (h *httpHealthChecker) checkClient(client HTTPClient) {
+	clientURL := client.GetBaseURL()
+
+	req, err := http.NewRequest("GET", clientURL+h.checkPath, nil)
+	if err != nil {
+		h.logger.Error("Failed to create health check request",
+			zap.String("url", clientURL+h.checkPath),
+			zap.Error(err),
+		)
+		h.recordFailure(clientURL, client)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req = req.WithContext(ctx)
+
+	var resp *http.Response
 	if defaultClient, ok := client.(*DefaultHTTPClient); ok {
-		clientURL := defaultClient.BaseURL
+		resp, err = defaultClient.Client.Do(req)
+	} else {
+		resp, err = client.Do(req)
+	}
 
-		req, err := http.NewRequest("GET", clientURL+h.checkPath, nil)
-		if err != nil {
-			h.logger.Error("Failed to create health check request",
-				zap.String("url", clientURL+h.checkPath),
-				zap.Error(err),
-			)
-			h.recordFailure(clientURL, client)
-			return
-		}
+	if err != nil {
+		h.logger.Warn("Health check failed",
+			zap.String("url", clientURL+h.checkPath),
+			zap.Error(err),
+		)
+		h.recordFailure(clientURL, client)
+		return
+	}
+	defer resp.Body.Close()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		req = req.WithContext(ctx)
-
-		resp, err := defaultClient.Client.Do(req)
-		if err != nil {
-			h.logger.Warn("Health check failed",
-				zap.String("url", clientURL+h.checkPath),
-				zap.Error(err),
-			)
-			h.recordFailure(clientURL, client)
-			return
-		}
-		defer resp.Body.Close()
-
-		isHealthy := resp.StatusCode == http.StatusOK
-		if isHealthy {
-			h.recordSuccess(clientURL, client)
-		} else {
-			h.logger.Warn("Health check returned non-OK status",
-				zap.String("url", clientURL+h.checkPath),
-				zap.Int("status", resp.StatusCode),
-			)
-			h.recordFailure(clientURL, client)
-		}
+	isHealthy := resp.StatusCode == http.StatusOK
+	if isHealthy {
+		h.recordSuccess(clientURL, client)
+	} else {
+		h.logger.Warn("Health check returned non-OK status",
+			zap.String("url", clientURL+h.checkPath),
+			zap.Int("status", resp.StatusCode),
+		)
+		h.recordFailure(clientURL, client)
 	}
 }
 
