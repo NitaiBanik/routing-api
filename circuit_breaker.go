@@ -37,7 +37,6 @@ func (cb *CircuitBreaker) Execute(operation func() error) error {
 
 	switch cb.state {
 	case StateClosed:
-		break
 	case StateOpen:
 		if time.Since(cb.lastFailureTime) >= cb.resetTimeout {
 			cb.state = StateHalfOpen
@@ -45,7 +44,6 @@ func (cb *CircuitBreaker) Execute(operation func() error) error {
 			return &CircuitBreakerError{Message: "circuit breaker is open"}
 		}
 	case StateHalfOpen:
-		break
 	}
 
 	err := operation()
@@ -76,12 +74,6 @@ func (cb *CircuitBreaker) GetState() CircuitBreakerState {
 	cb.mutex.RLock()
 	defer cb.mutex.RUnlock()
 	return cb.state
-}
-
-func (cb *CircuitBreaker) GetFailureCount() int {
-	cb.mutex.RLock()
-	defer cb.mutex.RUnlock()
-	return cb.failureCount
 }
 
 type CircuitBreakerError struct {

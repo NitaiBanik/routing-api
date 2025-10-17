@@ -20,7 +20,10 @@ func TestHealthHandler(t *testing.T) {
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
-	handler := NewProxyHandler([]string{"http://localhost:8080"}, "round-robin", retryConfig, circuitConfig)
+	factory := NewLoadBalancerFactory()
+	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, retryConfig, circuitConfig)
+	clientProvider := NewLoadBalancerAdapter(loadBalancer)
+	handler := NewProxyHandler(clientProvider)
 
 	tests := []struct {
 		name           string
@@ -52,8 +55,8 @@ func TestHealthHandler(t *testing.T) {
 }
 
 func TestProxyRequest(t *testing.T) {
-	mockBalancer := &MockLoadBalancer{client: nil}
-	handler := NewProxyHandlerWithDeps(mockBalancer)
+	mockProvider := &MockClientProvider{client: nil}
+	handler := NewProxyHandler(mockProvider)
 
 	tests := []struct {
 		name           string
@@ -87,15 +90,15 @@ func TestProxyRequest(t *testing.T) {
 	}
 }
 
-type MockLoadBalancer struct {
+type MockClientProvider struct {
 	client HTTPClient
 }
 
-func (m *MockLoadBalancer) Next() HTTPClient {
+func (m *MockClientProvider) GetClient() HTTPClient {
 	return m.client
 }
 
-func (m *MockLoadBalancer) StartHealthChecks(ctx context.Context, interval time.Duration) {
+func (m *MockClientProvider) StartHealthChecks(ctx context.Context, interval time.Duration) {
 	// Mock implementation - do nothing
 }
 
@@ -140,12 +143,13 @@ func TestRoundRobinDistribution(t *testing.T) {
 		ResetTimeout: 60 * time.Second,
 	}
 	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig)
-	handler := NewProxyHandlerWithDeps(balancer)
+	clientProvider := NewLoadBalancerAdapter(balancer)
+	handler := NewProxyHandler(clientProvider)
 
 	// Start health checker and wait a bit for initial health checks
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go handler.StartHealthChecks(ctx, []string{server1.URL, server2.URL}, 100*time.Millisecond)
+	go handler.StartHealthChecks(ctx, 100*time.Millisecond)
 	time.Sleep(200 * time.Millisecond) // Wait for health checks to complete
 
 	tests := []struct {

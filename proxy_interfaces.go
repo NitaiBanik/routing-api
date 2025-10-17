@@ -12,11 +12,16 @@ type HTTPClient interface {
 	SetUp(isUp bool)
 }
 
+type ClientProvider interface {
+	GetClient() HTTPClient
+	StartHealthChecks(ctx context.Context, interval time.Duration)
+}
+
 type LoadBalancer interface {
 	Next() HTTPClient
 	StartHealthChecks(ctx context.Context, interval time.Duration)
 }
 
 type ProxyHandler struct {
-	loadBalancer LoadBalancer
+	clientProvider ClientProvider
 }

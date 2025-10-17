@@ -29,7 +29,11 @@ func main() {
 		MaxFailures:  cfg.MaxFailures,
 		ResetTimeout: cfg.ResetTimeout,
 	}
-	handler := NewProxyHandler(cfg.ApplicationAPIs, cfg.BalancerType, retryConfig, circuitConfig)
+
+	loadBalancerFactory := NewLoadBalancerFactory()
+	loadBalancer := loadBalancerFactory.CreateLoadBalancer(cfg.BalancerType, cfg.ApplicationAPIs, retryConfig, circuitConfig)
+	clientProvider := NewLoadBalancerAdapter(loadBalancer)
+	handler := NewProxyHandler(clientProvider)
 
 	router := mux.NewRouter()
 
@@ -49,7 +53,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go handler.StartHealthChecks(ctx, cfg.ApplicationAPIs, cfg.HealthCheckInterval)
+	go handler.StartHealthChecks(ctx, cfg.HealthCheckInterval)
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

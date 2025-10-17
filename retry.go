@@ -35,10 +35,6 @@ func (rc *RetryableClient) Do(req *http.Request) (*http.Response, error) {
 	var lastErr error
 
 	for attempt := 0; attempt < rc.config.MaxAttempts; attempt++ {
-		if rc.circuitBreaker.IsOpen() {
-			return nil, &CircuitBreakerError{Message: "circuit breaker is open"}
-		}
-
 		var resp *http.Response
 		err := rc.circuitBreaker.Execute(func() error {
 			var execErr error

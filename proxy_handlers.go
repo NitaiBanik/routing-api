@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,17 +10,13 @@ import (
 	"time"
 )
 
-func NewProxyHandler(servers []string, balancerType string, retryConfig RetryConfig, circuitConfig CircuitBreakerConfig) *ProxyHandler {
-	loadBalancerFactory := NewLoadBalancerFactory()
-
-	return &ProxyHandler{
-		loadBalancer: loadBalancerFactory.CreateLoadBalancer(balancerType, servers, retryConfig, circuitConfig),
-	}
+type HealthResponse struct {
+	Status string `json:"status"`
 }
 
-func NewProxyHandlerWithDeps(loadBalancer LoadBalancer) *ProxyHandler {
+func NewProxyHandler(clientProvider ClientProvider) *ProxyHandler {
 	return &ProxyHandler{
-		loadBalancer: loadBalancer,
+		clientProvider: clientProvider,
 	}
 }
 
@@ -32,40 +27,15 @@ func (h *ProxyHandler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
-	client := h.loadBalancer.Next()
+	client := h.clientProvider.GetClient()
 	if client == nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "no servers configured")
+		http.Error(w, "no servers configured", http.StatusInternalServerError)
 		return
 	}
 
-	bodyBytes, err := io.ReadAll(req.Body)
+	resp, err := client.Do(req)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "cannot read request body")
-		return
-	}
-	req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
-
-	forwardReq, err := http.NewRequestWithContext(req.Context(), req.Method, req.URL.Path, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "cannot create forwarded request")
-		return
-	}
-
-	forwardReq.URL.RawQuery = req.URL.RawQuery
-
-	for key, values := range req.Header {
-		for _, value := range values {
-			forwardReq.Header.Add(key, value)
-		}
-	}
-
-	if forwardReq.Header.Get("Content-Type") == "" {
-		forwardReq.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := client.Do(forwardReq)
-	if err != nil {
-		writeErrorResponse(w, http.StatusBadGateway, fmt.Sprintf("cannot reach server: %v", err))
+		http.Error(w, fmt.Sprintf("cannot reach server: %v", err), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
@@ -83,6 +53,6 @@ func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (h *ProxyHandler) StartHealthChecks(ctx context.Context, servers []string, interval time.Duration) {
-	h.loadBalancer.StartHealthChecks(ctx, interval)
+func (h *ProxyHandler) StartHealthChecks(ctx context.Context, interval time.Duration) {
+	h.clientProvider.StartHealthChecks(ctx, interval)
 }
