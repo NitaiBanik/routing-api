@@ -1,4 +1,4 @@
-package main
+package health
 
 import (
 	"context"
@@ -60,9 +60,8 @@ func (h *httpHealthChecker) checkAllClients(clients []HTTPClient, onHealthChange
 }
 
 func (h *httpHealthChecker) checkClient(client HTTPClient) {
-	// Get the baseURL from the client (we need to cast to defaultHTTPClient)
-	if defaultClient, ok := client.(*defaultHTTPClient); ok {
-		req, err := http.NewRequest("GET", defaultClient.baseURL+h.checkPath, nil)
+	if defaultClient, ok := client.(*DefaultHTTPClient); ok {
+		req, err := http.NewRequest("GET", defaultClient.BaseURL+h.checkPath, nil)
 		if err != nil {
 			client.SetUp(false)
 			return

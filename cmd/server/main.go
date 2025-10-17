@@ -9,8 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"routing-api/config"
-	"routing-api/middleware"
+	"routing-api/internal/circuit"
+	"routing-api/internal/config"
+	"routing-api/internal/loadbalancer"
+	"routing-api/internal/middleware"
+	"routing-api/internal/proxy"
 
 	"github.com/gorilla/mux"
 )
@@ -21,19 +24,19 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	retryConfig := RetryConfig{
+	retryConfig := circuit.RetryConfig{
 		MaxAttempts: cfg.MaxRetries,
 		Delay:       cfg.RetryDelay,
 	}
-	circuitConfig := CircuitBreakerConfig{
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  cfg.MaxFailures,
 		ResetTimeout: cfg.ResetTimeout,
 	}
 
-	loadBalancerFactory := NewLoadBalancerFactory()
+	loadBalancerFactory := loadbalancer.NewLoadBalancerFactory()
 	loadBalancer := loadBalancerFactory.CreateLoadBalancer(cfg.BalancerType, cfg.ApplicationAPIs, retryConfig, circuitConfig)
-	clientProvider := NewLoadBalancerAdapter(loadBalancer)
-	handler := NewProxyHandler(clientProvider)
+	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
+	handler := proxy.NewProxyHandler(clientProvider)
 
 	router := mux.NewRouter()
 

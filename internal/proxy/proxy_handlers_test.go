@@ -1,4 +1,4 @@
-package main
+package proxy
 
 import (
 	"bytes"
@@ -11,18 +11,22 @@ import (
 	"testing"
 	"time"
 
+	"routing-api/internal/circuit"
+	"routing-api/internal/health"
+	"routing-api/internal/loadbalancer"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestHealthHandler(t *testing.T) {
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
-	factory := NewLoadBalancerFactory()
+	factory := loadbalancer.NewLoadBalancerFactory()
 	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, retryConfig, circuitConfig)
-	clientProvider := NewLoadBalancerAdapter(loadBalancer)
+	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
 	handler := NewProxyHandler(clientProvider)
 
 	tests := []struct {
@@ -91,10 +95,10 @@ func TestProxyRequest(t *testing.T) {
 }
 
 type MockClientProvider struct {
-	client HTTPClient
+	client health.HTTPClient
 }
 
-func (m *MockClientProvider) GetClient() HTTPClient {
+func (m *MockClientProvider) GetClient() health.HTTPClient {
 	return m.client
 }
 
@@ -137,13 +141,14 @@ func TestRoundRobinDistribution(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig)
-	clientProvider := NewLoadBalancerAdapter(balancer)
+	factory := loadbalancer.NewLoadBalancerFactory()
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, retryConfig, circuitConfig)
+	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := NewProxyHandler(clientProvider)
 
 	// Start health checker and wait a bit for initial health checks
@@ -189,9 +194,9 @@ func TestRoundRobinDistribution(t *testing.T) {
 }
 
 func TestLoadBalancerFactory(t *testing.T) {
-	factory := NewLoadBalancerFactory()
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	factory := loadbalancer.NewLoadBalancerFactory()
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
@@ -255,9 +260,9 @@ func TestLoadBalancerFactory(t *testing.T) {
 }
 
 func TestHTTPClientWithBaseURL(t *testing.T) {
-	client := &defaultHTTPClient{
+	client := &health.DefaultHTTPClient{
 		Client:  &http.Client{},
-		baseURL: "http://example.com",
+		BaseURL: "http://example.com",
 	}
 
 	req, _ := http.NewRequest("GET", "/test", nil)

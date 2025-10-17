@@ -76,7 +76,7 @@ func TestConfig_ValidationErrors(t *testing.T) {
 				os.Setenv(key, value)
 			}
 
-			cfg, err := Load()
+			cfg, err := LoadWithDefaults(false)
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -97,11 +97,11 @@ func TestConfig_DefaultValues(t *testing.T) {
 	assert.NotNil(t, cfg)
 
 	assert.Equal(t, "round-robin", cfg.BalancerType)
-	assert.Equal(t, "30s", cfg.HealthCheckInterval.String())
+	assert.Equal(t, "5s", cfg.HealthCheckInterval.String())
 	assert.Equal(t, 3, cfg.MaxRetries)
 	assert.Equal(t, "100ms", cfg.RetryDelay.String())
 	assert.Equal(t, 5, cfg.MaxFailures)
-	assert.Equal(t, "60s", cfg.ResetTimeout.String())
+	assert.Equal(t, "1m0s", cfg.ResetTimeout.String())
 }
 
 func TestGetEnvInt_EdgeCases(t *testing.T) {

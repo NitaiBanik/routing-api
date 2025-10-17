@@ -1,4 +1,4 @@
-package main
+package circuit
 
 import (
 	"net/http"
@@ -6,14 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"routing-api/internal/health"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRetryableClient_RetryOnNetworkFailure(t *testing.T) {
-	baseClient := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 100 * time.Millisecond},
-		baseURL: "http://localhost:9999",
-		isUp:    true,
+	baseClient := &health.DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 100 * time.Millisecond},
+		BaseURL: "http://localhost:9999",
+		Up:      true,
 	}
 
 	retryConfig := RetryConfig{
@@ -41,10 +43,10 @@ func TestRetryableClient_HTTPErrorNoRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	baseClient := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: server.URL,
-		isUp:    true,
+	baseClient := &health.DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: server.URL,
+		Up:      true,
 	}
 
 	retryConfig := RetryConfig{
@@ -67,10 +69,10 @@ func TestRetryableClient_HTTPErrorNoRetry(t *testing.T) {
 }
 
 func TestRetryableClient_CircuitBreakerOpen(t *testing.T) {
-	baseClient := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: "http://invalid-server:9999",
-		isUp:    true,
+	baseClient := &health.DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: "http://invalid-server:9999",
+		Up:      true,
 	}
 
 	retryConfig := RetryConfig{
@@ -105,10 +107,10 @@ func TestRetryableClient_CircuitBreakerRecovery(t *testing.T) {
 	}))
 	defer server.Close()
 
-	baseClient := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: server.URL,
-		isUp:    true,
+	baseClient := &health.DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: server.URL,
+		Up:      true,
 	}
 
 	retryConfig := RetryConfig{
@@ -133,10 +135,10 @@ func TestRetryableClient_CircuitBreakerRecovery(t *testing.T) {
 }
 
 func TestRetryableClient_IsUp(t *testing.T) {
-	baseClient := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: "http://example.com",
-		isUp:    true,
+	baseClient := &health.DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: "http://example.com",
+		Up:      true,
 	}
 
 	retryConfig := DefaultRetryConfig()
@@ -151,10 +153,10 @@ func TestRetryableClient_IsUp(t *testing.T) {
 }
 
 func TestRetryableClient_SetUp(t *testing.T) {
-	baseClient := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: "http://example.com",
-		isUp:    true,
+	baseClient := &health.DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: "http://example.com",
+		Up:      true,
 	}
 
 	retryConfig := DefaultRetryConfig()
@@ -173,7 +175,7 @@ func TestRetryableClient_SetUp(t *testing.T) {
 
 func TestDefaultRetryConfig(t *testing.T) {
 	config := DefaultRetryConfig()
-	
+
 	assert.Equal(t, 3, config.MaxAttempts)
 	assert.Equal(t, 100*time.Millisecond, config.Delay)
 }

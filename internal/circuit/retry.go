@@ -1,8 +1,10 @@
-package main
+package circuit
 
 import (
 	"net/http"
 	"time"
+
+	"routing-api/internal/health"
 )
 
 type RetryConfig struct {
@@ -16,12 +18,12 @@ type CircuitBreakerConfig struct {
 }
 
 type RetryableClient struct {
-	client         HTTPClient
+	client         health.HTTPClient
 	config         RetryConfig
 	circuitBreaker *CircuitBreaker
 }
 
-func NewRetryableClient(client HTTPClient, retryConfig RetryConfig, circuitConfig CircuitBreakerConfig) *RetryableClient {
+func NewRetryableClient(client health.HTTPClient, retryConfig RetryConfig, circuitConfig CircuitBreakerConfig) *RetryableClient {
 	circuitBreaker := NewCircuitBreaker(circuitConfig.MaxFailures, circuitConfig.ResetTimeout)
 
 	return &RetryableClient{
@@ -68,6 +70,11 @@ func (rc *RetryableClient) IsUp() bool {
 }
 
 func (rc *RetryableClient) SetUp(isUp bool) {
+	// Circuit breaker manages its own state
+}
+
+func (rc *RetryableClient) GetBaseURL() string {
+	return rc.client.GetBaseURL()
 }
 
 func DefaultRetryConfig() RetryConfig {

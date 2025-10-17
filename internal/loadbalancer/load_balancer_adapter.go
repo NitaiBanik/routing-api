@@ -1,8 +1,10 @@
-package main
+package loadbalancer
 
 import (
 	"context"
 	"time"
+
+	"routing-api/internal/health"
 )
 
 type loadBalancerAdapter struct {
@@ -15,7 +17,7 @@ func NewLoadBalancerAdapter(loadBalancer LoadBalancer) ClientProvider {
 	}
 }
 
-func (a *loadBalancerAdapter) GetClient() HTTPClient {
+func (a *loadBalancerAdapter) GetClient() health.HTTPClient {
 	return a.loadBalancer.Next()
 }
 

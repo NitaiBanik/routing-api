@@ -1,4 +1,4 @@
-package main
+package loadbalancer
 
 import (
 	"net/http"
@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"routing-api/internal/circuit"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
@@ -31,8 +33,8 @@ func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_AllClientsDown(t *testing.T) {
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
@@ -45,8 +47,8 @@ func TestRoundRobinLoadBalancer_AllClientsDown(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
@@ -78,8 +80,8 @@ func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
@@ -102,8 +104,8 @@ func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_ConcurrentAccess(t *testing.T) {
-	retryConfig := DefaultRetryConfig()
-	circuitConfig := CircuitBreakerConfig{
+	retryConfig := circuit.DefaultRetryConfig()
+	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}

@@ -1,4 +1,4 @@
-package main
+package health
 
 import (
 	"context"
@@ -58,10 +58,10 @@ func TestHTTPHealthChecker_CheckClient(t *testing.T) {
 				baseURL = server.URL
 			}
 
-			client := &defaultHTTPClient{
-				Client: &http.Client{Timeout: 1 * time.Second},
-				baseURL: baseURL,
-				isUp:    true,
+			client := &DefaultHTTPClient{
+				Client:  &http.Client{Timeout: 1 * time.Second},
+				BaseURL: baseURL,
+				Up:      true,
 			}
 
 			healthChecker.checkClient(client)
@@ -87,16 +87,16 @@ func TestHTTPHealthChecker_CheckAllClients(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	client1 := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 1 * time.Second},
-		baseURL: server1.URL,
-		isUp:    false,
+	client1 := &DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 1 * time.Second},
+		BaseURL: server1.URL,
+		Up:      false,
 	}
 
-	client2 := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 1 * time.Second},
-		baseURL: server2.URL,
-		isUp:    true,
+	client2 := &DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 1 * time.Second},
+		BaseURL: server2.URL,
+		Up:      true,
 	}
 
 	clients := []HTTPClient{client1, client2}
@@ -109,16 +109,16 @@ func TestHTTPHealthChecker_CheckAllClients(t *testing.T) {
 
 func TestHTTPHealthChecker_Start(t *testing.T) {
 	healthChecker := NewHTTPHealthChecker()
-	
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	client := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 1 * time.Second},
-		baseURL: server.URL,
-		isUp:    false,
+	client := &DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 1 * time.Second},
+		BaseURL: server.URL,
+		Up:      false,
 	}
 
 	clients := []HTTPClient{client}

@@ -1,4 +1,4 @@
-package main
+package health
 
 import (
 	"net/http"
@@ -17,10 +17,10 @@ func TestDefaultHTTPClient_Do(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: server.URL,
-		isUp:    true,
+	client := &DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: server.URL,
+		Up:      true,
 	}
 
 	req, err := http.NewRequest("GET", "/test", nil)
@@ -32,23 +32,23 @@ func TestDefaultHTTPClient_Do(t *testing.T) {
 }
 
 func TestDefaultHTTPClient_IsUp(t *testing.T) {
-	client := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: "http://example.com",
-		isUp:    true,
+	client := &DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: "http://example.com",
+		Up:      true,
 	}
 
 	assert.True(t, client.IsUp())
 
-	client.isUp = false
+	client.Up = false
 	assert.False(t, client.IsUp())
 }
 
 func TestDefaultHTTPClient_SetUp(t *testing.T) {
-	client := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: "http://example.com",
-		isUp:    false,
+	client := &DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: "http://example.com",
+		Up:      false,
 	}
 
 	client.SetUp(true)
@@ -59,10 +59,10 @@ func TestDefaultHTTPClient_SetUp(t *testing.T) {
 }
 
 func TestDefaultHTTPClient_ConcurrentAccess(t *testing.T) {
-	client := &defaultHTTPClient{
-		Client: &http.Client{Timeout: 5 * time.Second},
-		baseURL: "http://example.com",
-		isUp:    false,
+	client := &DefaultHTTPClient{
+		Client:  &http.Client{Timeout: 5 * time.Second},
+		BaseURL: "http://example.com",
+		Up:      false,
 	}
 
 	done := make(chan bool, 2)

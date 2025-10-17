@@ -1,20 +1,25 @@
-package main
+package proxy
 
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"time"
+
+	"routing-api/internal/loadbalancer"
 )
 
 type HealthResponse struct {
 	Status string `json:"status"`
 }
 
-func NewProxyHandler(clientProvider ClientProvider) *ProxyHandler {
+type ProxyHandler struct {
+	clientProvider loadbalancer.ClientProvider
+}
+
+func NewProxyHandler(clientProvider loadbalancer.ClientProvider) *ProxyHandler {
 	return &ProxyHandler{
 		clientProvider: clientProvider,
 	}
@@ -35,7 +40,7 @@ func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("cannot reach server: %v", err), http.StatusBadGateway)
+		http.Error(w, "cannot reach server", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
