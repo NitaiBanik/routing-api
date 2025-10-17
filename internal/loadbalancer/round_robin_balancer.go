@@ -32,7 +32,7 @@ func (r *roundRobinLoadBalancer) Next() health.HTTPClient {
 	return client
 }
 
-func newRoundRobinLoadBalancer(servers []string, retryConfig circuit.RetryConfig, circuitConfig circuit.CircuitBreakerConfig, logger logger.Logger) *roundRobinLoadBalancer {
+func newRoundRobinLoadBalancer(servers []string, circuitConfig circuit.CircuitBreakerConfig, logger logger.Logger) *roundRobinLoadBalancer {
 	clients := make([]health.HTTPClient, len(servers))
 	availableClients := make([]health.HTTPClient, len(servers))
 
@@ -44,9 +44,9 @@ func newRoundRobinLoadBalancer(servers []string, retryConfig circuit.RetryConfig
 			BaseURL: serverURL,
 			Up:      true,
 		}
-		retryableClient := circuit.NewRetryableClient(baseClient, retryConfig, circuitConfig)
-		clients[i] = retryableClient
-		availableClients[i] = retryableClient
+		circuitBreakerClient := circuit.NewCircuitBreakerClient(baseClient, circuitConfig)
+		clients[i] = circuitBreakerClient
+		availableClients[i] = circuitBreakerClient
 	}
 
 	return &roundRobinLoadBalancer{

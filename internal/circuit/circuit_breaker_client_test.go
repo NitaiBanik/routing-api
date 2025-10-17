@@ -11,33 +11,29 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRetryableClient_RetryOnNetworkFailure(t *testing.T) {
+func TestCircuitBreakerClient_NetworkFailure(t *testing.T) {
 	baseClient := &health.DefaultHTTPClient{
 		Client:  &http.Client{Timeout: 100 * time.Millisecond},
 		BaseURL: "http://localhost:9999",
 		Up:      true,
 	}
 
-	retryConfig := RetryConfig{
-		MaxAttempts: 3,
-		Delay:       10 * time.Millisecond,
-	}
 	circuitConfig := CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
 
-	retryableClient := NewRetryableClient(baseClient, retryConfig, circuitConfig)
+	circuitBreakerClient := NewCircuitBreakerClient(baseClient, circuitConfig)
 
 	req, err := http.NewRequest("GET", "/test", nil)
 	assert.NoError(t, err)
 
-	resp, err := retryableClient.Do(req)
+	resp, err := circuitBreakerClient.Do(req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 }
 
-func TestRetryableClient_HTTPErrorNoRetry(t *testing.T) {
+func TestCircuitBreakerClient_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -49,59 +45,51 @@ func TestRetryableClient_HTTPErrorNoRetry(t *testing.T) {
 		Up:      true,
 	}
 
-	retryConfig := RetryConfig{
-		MaxAttempts: 3,
-		Delay:       10 * time.Millisecond,
-	}
 	circuitConfig := CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
 
-	retryableClient := NewRetryableClient(baseClient, retryConfig, circuitConfig)
+	circuitBreakerClient := NewCircuitBreakerClient(baseClient, circuitConfig)
 
 	req, err := http.NewRequest("GET", "/test", nil)
 	assert.NoError(t, err)
 
-	resp, err := retryableClient.Do(req)
+	resp, err := circuitBreakerClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 }
 
-func TestRetryableClient_CircuitBreakerOpen(t *testing.T) {
+func TestCircuitBreakerClient_CircuitBreakerOpen(t *testing.T) {
 	baseClient := &health.DefaultHTTPClient{
 		Client:  &http.Client{Timeout: 5 * time.Second},
 		BaseURL: "http://invalid-server:9999",
 		Up:      true,
 	}
 
-	retryConfig := RetryConfig{
-		MaxAttempts: 3,
-		Delay:       10 * time.Millisecond,
-	}
 	circuitConfig := CircuitBreakerConfig{
 		MaxFailures:  2,
 		ResetTimeout: 100 * time.Millisecond,
 	}
 
-	retryableClient := NewRetryableClient(baseClient, retryConfig, circuitConfig)
+	circuitBreakerClient := NewCircuitBreakerClient(baseClient, circuitConfig)
 
 	req, err := http.NewRequest("GET", "/test", nil)
 	assert.NoError(t, err)
 
 	for i := 0; i < 2; i++ {
-		resp, err := retryableClient.Do(req)
+		resp, err := circuitBreakerClient.Do(req)
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 	}
 
-	resp, err := retryableClient.Do(req)
+	resp, err := circuitBreakerClient.Do(req)
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.IsType(t, &CircuitBreakerError{}, err)
 }
 
-func TestRetryableClient_CircuitBreakerRecovery(t *testing.T) {
+func TestCircuitBreakerClient_CircuitBreakerRecovery(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -113,69 +101,56 @@ func TestRetryableClient_CircuitBreakerRecovery(t *testing.T) {
 		Up:      true,
 	}
 
-	retryConfig := RetryConfig{
-		MaxAttempts: 1,
-		Delay:       10 * time.Millisecond,
-	}
 	circuitConfig := CircuitBreakerConfig{
 		MaxFailures:  1,
 		ResetTimeout: 50 * time.Millisecond,
 	}
 
-	retryableClient := NewRetryableClient(baseClient, retryConfig, circuitConfig)
+	circuitBreakerClient := NewCircuitBreakerClient(baseClient, circuitConfig)
 
 	req, err := http.NewRequest("GET", "/test", nil)
 	assert.NoError(t, err)
 
-	resp, err := retryableClient.Do(req)
+	resp, err := circuitBreakerClient.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	assert.True(t, retryableClient.IsUp())
+	assert.True(t, circuitBreakerClient.IsUp())
 }
 
-func TestRetryableClient_IsUp(t *testing.T) {
+func TestCircuitBreakerClient_IsUp(t *testing.T) {
 	baseClient := &health.DefaultHTTPClient{
 		Client:  &http.Client{Timeout: 5 * time.Second},
 		BaseURL: "http://example.com",
 		Up:      true,
 	}
 
-	retryConfig := DefaultRetryConfig()
 	circuitConfig := CircuitBreakerConfig{
 		MaxFailures:  2,
 		ResetTimeout: 60 * time.Second,
 	}
 
-	retryableClient := NewRetryableClient(baseClient, retryConfig, circuitConfig)
+	circuitBreakerClient := NewCircuitBreakerClient(baseClient, circuitConfig)
 
-	assert.True(t, retryableClient.IsUp())
+	assert.True(t, circuitBreakerClient.IsUp())
 }
 
-func TestRetryableClient_SetUp(t *testing.T) {
+func TestCircuitBreakerClient_SetUp(t *testing.T) {
 	baseClient := &health.DefaultHTTPClient{
 		Client:  &http.Client{Timeout: 5 * time.Second},
 		BaseURL: "http://example.com",
 		Up:      true,
 	}
 
-	retryConfig := DefaultRetryConfig()
 	circuitConfig := CircuitBreakerConfig{
 		MaxFailures:  2,
 		ResetTimeout: 60 * time.Second,
 	}
 
-	retryableClient := NewRetryableClient(baseClient, retryConfig, circuitConfig)
+	circuitBreakerClient := NewCircuitBreakerClient(baseClient, circuitConfig)
 
 	assert.NotPanics(t, func() {
-		retryableClient.SetUp(true)
-		retryableClient.SetUp(false)
+		circuitBreakerClient.SetUp(true)
+		circuitBreakerClient.SetUp(false)
 	})
-}
-
-func TestDefaultRetryConfig(t *testing.T) {
-	config := DefaultRetryConfig()
-
-	assert.Equal(t, 3, config.MaxAttempts)
-	assert.Equal(t, 100*time.Millisecond, config.Delay)
 }

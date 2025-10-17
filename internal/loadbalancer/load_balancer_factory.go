@@ -11,11 +11,11 @@ func NewLoadBalancerFactory() *LoadBalancerFactory {
 	return &LoadBalancerFactory{}
 }
 
-func (f *LoadBalancerFactory) CreateLoadBalancer(balancerType string, servers []string, retryConfig circuit.RetryConfig, circuitConfig circuit.CircuitBreakerConfig, logger logger.Logger) LoadBalancer {
+func (f *LoadBalancerFactory) CreateLoadBalancer(balancerType string, servers []string, circuitConfig circuit.CircuitBreakerConfig, logger logger.Logger) LoadBalancer {
 	switch balancerType {
 	case "round-robin":
-		return newRoundRobinLoadBalancer(servers, retryConfig, circuitConfig, logger)
+		return newRoundRobinLoadBalancer(servers, circuitConfig, logger)
 	default:
-		return newRoundRobinLoadBalancer(servers, retryConfig, circuitConfig, logger)
+		return newRoundRobinLoadBalancer(servers, circuitConfig, logger)
 	}
 }

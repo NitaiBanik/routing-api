@@ -20,13 +20,12 @@ import (
 )
 
 func TestHealthHandler(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, retryConfig, circuitConfig, logger.NewTestLogger())
+	loadBalancer := factory.CreateLoadBalancer("round-robin", []string{"http://localhost:8080"}, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
 	handler := NewProxyHandler(clientProvider, logger.NewTestLogger())
 
@@ -142,13 +141,12 @@ func TestRoundRobinDistribution(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := NewProxyHandler(clientProvider, logger.NewTestLogger())
 
@@ -195,7 +193,6 @@ func TestRoundRobinDistribution(t *testing.T) {
 
 func TestLoadBalancerFactory(t *testing.T) {
 	factory := loadbalancer.NewLoadBalancerFactory()
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
@@ -237,7 +234,7 @@ func TestLoadBalancerFactory(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			balancer := factory.CreateLoadBalancer(tt.balancerType, servers, retryConfig, circuitConfig, logger.NewTestLogger())
+			balancer := factory.CreateLoadBalancer(tt.balancerType, servers, circuitConfig, logger.NewTestLogger())
 			assert.NotNil(t, balancer)
 
 			ctx, cancel := context.WithCancel(context.Background())

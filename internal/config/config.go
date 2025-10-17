@@ -26,10 +26,6 @@ type Config struct {
 	SlowThreshold  time.Duration
 	MaxSlowCount   int
 
-	// Retry Config
-	MaxRetries int
-	RetryDelay time.Duration
-
 	// HTTP Client Timeouts
 	RequestTimeout  time.Duration
 	ConnectTimeout  time.Duration
@@ -42,22 +38,17 @@ func Load() (*Config, error) {
 
 func LoadWithDefaults(useDefaults bool) (*Config, error) {
 	var port string
-	var maxFailures, maxRetries int
+	var maxFailures int
 	var err error
 
 	if useDefaults {
 		port = getEnv("PORT", "3000")
 		maxFailures = getEnvInt("MAX_FAILURES", 5)
-		maxRetries = getEnvInt("MAX_RETRIES", 3)
 	} else {
 		port = getEnvRaw("PORT")
 		maxFailures, err = getEnvIntRaw("MAX_FAILURES")
 		if err != nil {
 			return nil, fmt.Errorf("invalid MAX_FAILURES: %w", err)
-		}
-		maxRetries, err = getEnvIntRaw("MAX_RETRIES")
-		if err != nil {
-			return nil, fmt.Errorf("invalid MAX_RETRIES: %w", err)
 		}
 	}
 
@@ -75,9 +66,6 @@ func LoadWithDefaults(useDefaults bool) (*Config, error) {
 		ResetTimeout:   getEnvDuration("RESET_TIMEOUT", "60s"),
 		SlowThreshold:  getEnvDuration("SLOW_THRESHOLD", "5s"),
 		MaxSlowCount:   getEnvInt("MAX_SLOW_COUNT", 3),
-
-		MaxRetries: maxRetries,
-		RetryDelay: getEnvDuration("RETRY_DELAY", "100ms"),
 
 		RequestTimeout:  getEnvDuration("REQUEST_TIMEOUT", "30s"),
 		ConnectTimeout:  getEnvDuration("CONNECT_TIMEOUT", "5s"),

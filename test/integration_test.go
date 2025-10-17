@@ -30,14 +30,13 @@ func TestIntegration_LoadBalancingWithFailures(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  2,
 		ResetTimeout: 100 * time.Millisecond,
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
 
@@ -77,14 +76,13 @@ func TestIntegration_HealthCheckIntegration(t *testing.T) {
 	}))
 	defer unhealthyServer.Close()
 
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  2,
 		ResetTimeout: 100 * time.Millisecond,
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{healthyServer.URL, unhealthyServer.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{healthyServer.URL, unhealthyServer.URL}, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
 
@@ -124,17 +122,13 @@ func TestIntegration_CircuitBreakerWithRetry(t *testing.T) {
 	}))
 	defer server.Close()
 
-	retryConfig := circuit.RetryConfig{
-		MaxAttempts: 3,
-		Delay:       10 * time.Millisecond,
-	}
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 100 * time.Millisecond,
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
 
@@ -150,14 +144,13 @@ func TestIntegration_CircuitBreakerWithRetry(t *testing.T) {
 }
 
 func TestIntegration_AllBackendsDown(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  2,
 		ResetTimeout: 100 * time.Millisecond,
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{"http://invalid1:9999", "http://invalid2:9999"}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{"http://invalid1:9999", "http://invalid2:9999"}, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
 
@@ -197,14 +190,13 @@ func TestIntegration_JSONRequestForwarding(t *testing.T) {
 	}))
 	defer server.Close()
 
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  2,
 		ResetTimeout: 100 * time.Millisecond,
 	}
 
 	factory := loadbalancer.NewLoadBalancerFactory()
-	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, circuitConfig, logger.NewTestLogger())
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
 	handler := proxy.NewProxyHandler(clientProvider, logger.NewTestLogger())
 

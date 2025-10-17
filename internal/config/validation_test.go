@@ -98,8 +98,6 @@ func TestConfig_DefaultValues(t *testing.T) {
 
 	assert.Equal(t, "round-robin", cfg.BalancerType)
 	assert.Equal(t, "5s", cfg.HealthCheckInterval.String())
-	assert.Equal(t, 3, cfg.MaxRetries)
-	assert.Equal(t, "100ms", cfg.RetryDelay.String())
 	assert.Equal(t, 5, cfg.MaxFailures)
 	assert.Equal(t, "1m0s", cfg.ResetTimeout.String())
 }

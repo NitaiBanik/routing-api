@@ -13,7 +13,6 @@ import (
 )
 
 func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
@@ -29,18 +28,17 @@ func TestRoundRobinLoadBalancer_UpdateAvailableClients(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
 	assert.Equal(t, 2, len(balancer.availableClients))
 }
 
 func TestRoundRobinLoadBalancer_AllClientsDown(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
 	}
 
-	balancer := newRoundRobinLoadBalancer([]string{"http://localhost:8080", "http://localhost:8081"}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{"http://localhost:8080", "http://localhost:8081"}, circuitConfig, logger.NewTestLogger())
 	assert.Equal(t, 2, len(balancer.availableClients))
 
 	client := balancer.Next()
@@ -48,7 +46,6 @@ func TestRoundRobinLoadBalancer_AllClientsDown(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
@@ -64,7 +61,7 @@ func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
 
 	client1 := balancer.Next()
 	client2 := balancer.Next()
@@ -80,7 +77,6 @@ func TestRoundRobinLoadBalancer_IndexManagement(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
@@ -96,7 +92,7 @@ func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
 	}))
 	defer server2.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server1.URL, server2.URL}, circuitConfig, logger.NewTestLogger())
 	balancer.currentIndex = 1
 	balancer.updateAvailableClients()
 
@@ -104,7 +100,6 @@ func TestRoundRobinLoadBalancer_IndexAdjustmentOnClientRemoval(t *testing.T) {
 }
 
 func TestRoundRobinLoadBalancer_ConcurrentAccess(t *testing.T) {
-	retryConfig := circuit.DefaultRetryConfig()
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  5,
 		ResetTimeout: 60 * time.Second,
@@ -115,7 +110,7 @@ func TestRoundRobinLoadBalancer_ConcurrentAccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	balancer := newRoundRobinLoadBalancer([]string{server.URL}, retryConfig, circuitConfig, logger.NewTestLogger())
+	balancer := newRoundRobinLoadBalancer([]string{server.URL}, circuitConfig, logger.NewTestLogger())
 
 	done := make(chan bool, 2)
 

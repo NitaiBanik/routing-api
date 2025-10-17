@@ -38,17 +38,13 @@ func main() {
 		zap.String("log_level", cfg.LogLevel),
 	)
 
-	retryConfig := circuit.RetryConfig{
-		MaxAttempts: cfg.MaxRetries,
-		Delay:       cfg.RetryDelay,
-	}
 	circuitConfig := circuit.CircuitBreakerConfig{
 		MaxFailures:  cfg.MaxFailures,
 		ResetTimeout: cfg.ResetTimeout,
 	}
 
 	loadBalancerFactory := loadbalancer.NewLoadBalancerFactory()
-	loadBalancer := loadBalancerFactory.CreateLoadBalancer(cfg.BalancerType, cfg.ApplicationAPIs, retryConfig, circuitConfig, log)
+	loadBalancer := loadBalancerFactory.CreateLoadBalancer(cfg.BalancerType, cfg.ApplicationAPIs, circuitConfig, log)
 	clientProvider := loadbalancer.NewLoadBalancerAdapter(loadBalancer)
 	handler := proxy.NewProxyHandler(clientProvider, log)
 
