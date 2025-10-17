@@ -77,7 +77,13 @@ func TestHTTPHealthChecker_CheckClient(t *testing.T) {
 				Up:      true,
 			}
 
-			healthChecker.checkClient(client)
+			if !tt.expectedUp {
+				for i := 0; i < 3; i++ {
+					healthChecker.checkClient(client)
+				}
+			} else {
+				healthChecker.checkClient(client)
+			}
 			assert.Equal(t, tt.expectedUp, client.IsUp())
 		})
 	}
@@ -113,7 +119,10 @@ func TestHTTPHealthChecker_CheckAllClients(t *testing.T) {
 	}
 
 	clients := []HTTPClient{client1, client2}
-	healthChecker.checkAllClients(clients, onHealthChange)
+	
+	for i := 0; i < 3; i++ {
+		healthChecker.checkAllClients(clients, onHealthChange)
+	}
 
 	assert.True(t, healthChanged)
 	assert.True(t, client1.IsUp())

@@ -16,14 +16,19 @@ type HealthChecker interface {
 }
 
 type httpHealthChecker struct {
-	checkPath string
-	logger    logger.Logger
+	checkPath        string
+	failureThreshold int
+	logger           logger.Logger
+	failureCounts    map[string]int
+	mutex            sync.RWMutex
 }
 
 func NewHTTPHealthChecker(logger logger.Logger) *httpHealthChecker {
 	return &httpHealthChecker{
-		checkPath: "/health",
-		logger:    logger,
+		checkPath:        "/health",
+		failureThreshold: 3,
+		logger:           logger,
+		failureCounts:    make(map[string]int),
 	}
 }
 
@@ -67,13 +72,15 @@ func (h *httpHealthChecker) checkAllClients(clients []HTTPClient, onHealthChange
 
 func (h *httpHealthChecker) checkClient(client HTTPClient) {
 	if defaultClient, ok := client.(*DefaultHTTPClient); ok {
-		req, err := http.NewRequest("GET", defaultClient.BaseURL+h.checkPath, nil)
+		clientURL := defaultClient.BaseURL
+
+		req, err := http.NewRequest("GET", clientURL+h.checkPath, nil)
 		if err != nil {
 			h.logger.Error("Failed to create health check request",
-				zap.String("url", defaultClient.BaseURL+h.checkPath),
+				zap.String("url", clientURL+h.checkPath),
 				zap.Error(err),
 			)
-			client.SetUp(false)
+			h.recordFailure(clientURL, client)
 			return
 		}
 
@@ -84,22 +91,60 @@ func (h *httpHealthChecker) checkClient(client HTTPClient) {
 		resp, err := defaultClient.Client.Do(req)
 		if err != nil {
 			h.logger.Warn("Health check failed",
-				zap.String("url", defaultClient.BaseURL+h.checkPath),
+				zap.String("url", clientURL+h.checkPath),
 				zap.Error(err),
 			)
-			client.SetUp(false)
+			h.recordFailure(clientURL, client)
 			return
 		}
 		defer resp.Body.Close()
 
 		isHealthy := resp.StatusCode == http.StatusOK
-		client.SetUp(isHealthy)
-		
-		if !isHealthy {
+		if isHealthy {
+			h.recordSuccess(clientURL, client)
+		} else {
 			h.logger.Warn("Health check returned non-OK status",
-				zap.String("url", defaultClient.BaseURL+h.checkPath),
+				zap.String("url", clientURL+h.checkPath),
 				zap.Int("status", resp.StatusCode),
 			)
+			h.recordFailure(clientURL, client)
 		}
+	}
+}
+
+func (h *httpHealthChecker) recordSuccess(clientURL string, client HTTPClient) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	h.failureCounts[clientURL] = 0
+
+	if !client.IsUp() {
+		client.SetUp(true)
+		h.logger.Info("Server marked as healthy",
+			zap.String("url", clientURL),
+		)
+	}
+}
+
+func (h *httpHealthChecker) recordFailure(clientURL string, client HTTPClient) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	h.failureCounts[clientURL]++
+	failureCount := h.failureCounts[clientURL]
+
+	h.logger.Debug("Health check failure recorded",
+		zap.String("url", clientURL),
+		zap.Int("consecutive_failures", failureCount),
+		zap.Int("threshold", h.failureThreshold),
+	)
+
+	if failureCount >= h.failureThreshold && client.IsUp() {
+		client.SetUp(false)
+		h.logger.Warn("Server marked as unhealthy",
+			zap.String("url", clientURL),
+			zap.Int("consecutive_failures", failureCount),
+			zap.Int("threshold", h.failureThreshold),
+		)
 	}
 }
