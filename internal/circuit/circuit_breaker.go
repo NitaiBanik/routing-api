@@ -14,15 +14,15 @@ const (
 )
 
 type CircuitBreaker struct {
-	state           CircuitBreakerState
-	failureCount    int
-	maxFailures     int
-	resetTimeout    time.Duration
-	lastFailureTime time.Time
-	slowThreshold   time.Duration
-	slowCount       int
-	maxSlowCount    int
-	mutex           sync.RWMutex
+	state         CircuitBreakerState
+	failureCount  int
+	maxFailures   int
+	resetTimeout  time.Duration
+	lastIssueTime time.Time
+	slowThreshold time.Duration
+	slowCount     int
+	maxSlowCount  int
+	mutex         sync.RWMutex
 }
 
 func NewCircuitBreaker(maxFailures int, resetTimeout time.Duration) *CircuitBreaker {
@@ -56,7 +56,7 @@ func (cb *CircuitBreaker) Execute(operation func() error) error {
 	switch cb.state {
 	case StateClosed:
 	case StateOpen:
-		if time.Since(cb.lastFailureTime) >= cb.resetTimeout {
+		if time.Since(cb.lastIssueTime) >= cb.resetTimeout {
 			cb.state = StateHalfOpen
 		} else {
 			return &CircuitBreakerError{Message: "circuit breaker is open"}
@@ -71,9 +71,11 @@ func (cb *CircuitBreaker) Execute(operation func() error) error {
 	isSlow := responseTime > cb.slowThreshold
 
 	if err != nil || isSlow {
-		cb.failureCount++
-		cb.lastFailureTime = time.Now()
+		cb.lastIssueTime = time.Now()
 
+		if err != nil {
+			cb.failureCount++
+		}
 		if isSlow {
 			cb.slowCount++
 		}
@@ -81,7 +83,7 @@ func (cb *CircuitBreaker) Execute(operation func() error) error {
 		if cb.state == StateHalfOpen || cb.failureCount >= cb.maxFailures || cb.slowCount >= cb.maxSlowCount {
 			cb.state = StateOpen
 		}
-		
+
 		if isSlow && err == nil {
 			return &CircuitBreakerError{Message: "response too slow"}
 		}
