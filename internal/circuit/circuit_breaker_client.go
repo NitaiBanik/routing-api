@@ -38,10 +38,19 @@ func (cbc *CircuitBreakerClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func (cbc *CircuitBreakerClient) IsUp() bool {
-	return !cbc.circuitBreaker.IsOpen()
+	return cbc.client.IsUp()
 }
 
 func (cbc *CircuitBreakerClient) SetUp(isUp bool) {
+	cbc.client.SetUp(isUp)
+
+	if isUp {
+		cbc.circuitBreaker.mutex.Lock()
+		cbc.circuitBreaker.failureCount = 0
+		cbc.circuitBreaker.slowCount = 0
+		cbc.circuitBreaker.state = StateClosed
+		cbc.circuitBreaker.mutex.Unlock()
+	}
 }
 
 func (cbc *CircuitBreakerClient) GetBaseURL() string {
