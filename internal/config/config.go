@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"os"
@@ -16,47 +17,40 @@ type Config struct {
 	ApplicationAPIs []string
 	BalancerType    string
 
-	// Health Check Config
 	HealthCheckInterval time.Duration
 
-	// Circuit Breaker Config
 	MaxFailures    int
 	CircuitTimeout time.Duration
 	ResetTimeout   time.Duration
 	SlowThreshold  time.Duration
 	MaxSlowCount   int
 
-	// HTTP Client Timeouts
 	RequestTimeout  time.Duration
 	ConnectTimeout  time.Duration
 	ResponseTimeout time.Duration
 }
 
 func Load() (*Config, error) {
-	return LoadWithDefaults(true)
+	loadEnvFile()
+	config, err := loadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load configuration: %w", err)
+	}
+	return config, nil
 }
 
-func LoadWithDefaults(useDefaults bool) (*Config, error) {
-	var port string
-	var maxFailures int
-	var err error
-
-	if useDefaults {
-		port = getEnv("PORT", "3000")
-		maxFailures = getEnvInt("MAX_FAILURES", 5)
-	} else {
-		port = getEnvRaw("PORT")
-		maxFailures, err = getEnvIntRaw("MAX_FAILURES")
-		if err != nil {
-			return nil, fmt.Errorf("invalid MAX_FAILURES: %w", err)
-		}
+func loadConfig() (*Config, error) {
+	port := getEnvRaw("PORT")
+	maxFailures, err := getEnvIntRaw("MAX_FAILURES")
+	if err != nil {
+		return nil, fmt.Errorf("invalid MAX_FAILURES: %w", err)
 	}
 
 	config := &Config{
 		Port:            port,
 		Environment:     getEnv("ENVIRONMENT", "development"),
 		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		ApplicationAPIs: getApplicationAPIsWithDefaults(useDefaults),
+		ApplicationAPIs: getApplicationAPIs(),
 		BalancerType:    getEnv("BALANCER_TYPE", "round-robin"),
 
 		HealthCheckInterval: getEnvDuration("HEALTH_CHECK_INTERVAL", "5s"),
@@ -83,9 +77,11 @@ func (c *Config) Validate() error {
 	if c.Port == "" {
 		return errors.New("port cannot be empty")
 	}
+
 	if len(c.ApplicationAPIs) == 0 {
 		return errors.New("at least one application API must be configured")
 	}
+
 	return nil
 }
 
@@ -101,15 +97,9 @@ func getEnvRaw(key string) string {
 }
 
 func getApplicationAPIs() []string {
-	return getApplicationAPIsWithDefaults(true)
-}
-
-func getApplicationAPIsWithDefaults(useDefaults bool) []string {
 	var apis []string
 
-	// Check APPLICATION_APIS environment variable first
 	if apisEnv := os.Getenv("APPLICATION_APIS"); apisEnv != "" {
-		// Split by comma and trim spaces
 		parts := strings.Split(apisEnv, ",")
 		for _, part := range parts {
 			if trimmed := strings.TrimSpace(part); trimmed != "" {
@@ -119,19 +109,9 @@ func getApplicationAPIsWithDefaults(useDefaults bool) []string {
 		return apis
 	}
 
-	// Fallback to individual API_1, API_2, etc.
 	for i := 1; i <= 10; i++ {
 		if api := os.Getenv("API_" + strconv.Itoa(i)); api != "" {
 			apis = append(apis, api)
-		}
-	}
-
-	// Only return defaults if useDefaults is true and no APIs are configured
-	if useDefaults && len(apis) == 0 {
-		apis = []string{
-			"http://localhost:8080",
-			"http://localhost:8081",
-			"http://localhost:8082",
 		}
 	}
 
@@ -154,15 +134,6 @@ func getEnvIntRaw(key string) (int, error) {
 	return 0, errors.New("environment variable not set")
 }
 
-func getEnvFloat(key string, defaultValue float64) float64 {
-	if value := os.Getenv(key); value != "" {
-		if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-			return floatVal
-		}
-	}
-	return defaultValue
-}
-
 func getEnvDuration(key string, defaultValue string) time.Duration {
 	if value := os.Getenv(key); value != "" {
 		if duration, err := time.ParseDuration(value); err == nil {
@@ -173,4 +144,29 @@ func getEnvDuration(key string, defaultValue string) time.Duration {
 		return duration
 	}
 	return time.Duration(0)
+}
+
+func loadEnvFile() {
+	file, err := os.Open(".env")
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			if os.Getenv(key) == "" {
+				os.Setenv(key, value)
+			}
+		}
+	}
 }

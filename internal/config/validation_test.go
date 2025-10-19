@@ -76,7 +76,7 @@ func TestConfig_ValidationErrors(t *testing.T) {
 				os.Setenv(key, value)
 			}
 
-			cfg, err := LoadWithDefaults(false)
+			cfg, err := Load()
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -90,6 +90,7 @@ func TestConfig_ValidationErrors(t *testing.T) {
 func TestConfig_DefaultValues(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("PORT", "8080")
+	os.Setenv("MAX_FAILURES", "5")
 	os.Setenv("APPLICATION_APIS", "http://localhost:8081")
 
 	cfg, err := Load()
@@ -143,46 +144,6 @@ func TestGetEnvInt_EdgeCases(t *testing.T) {
 			}
 
 			result := getEnvInt("TEST_INT", tt.defaultValue)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGetEnvFloat_EdgeCases(t *testing.T) {
-	tests := []struct {
-		name         string
-		envValue     string
-		defaultValue float64
-		expected     float64
-	}{
-		{
-			name:         "valid float",
-			envValue:     "3.14",
-			defaultValue: 0.0,
-			expected:     3.14,
-		},
-		{
-			name:         "invalid float",
-			envValue:     "not-a-float",
-			defaultValue: 1.0,
-			expected:     1.0,
-		},
-		{
-			name:         "empty value",
-			envValue:     "",
-			defaultValue: 2.5,
-			expected:     2.5,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			os.Clearenv()
-			if tt.envValue != "" {
-				os.Setenv("TEST_FLOAT", tt.envValue)
-			}
-
-			result := getEnvFloat("TEST_FLOAT", tt.defaultValue)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
