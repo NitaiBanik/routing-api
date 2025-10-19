@@ -239,3 +239,80 @@ func TestIntegration_JSONRequestForwarding(t *testing.T) {
 	}
 	assert.Equal(t, expectedEcho, response["echo"])
 }
+
+func TestIntegration_CircuitBreakerAllStates(t *testing.T) {
+	// Create a server that fails initially, then recovers
+	attemptCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attemptCount++
+
+		// Fail first 2 requests by closing connection, then succeed
+		if attemptCount <= 2 {
+			hj, _ := w.(http.Hijacker)
+			conn, _, _ := hj.Hijack()
+			conn.Close()
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("success"))
+	}))
+	defer server.Close()
+
+	circuitConfig := circuit.CircuitBreakerConfig{
+		MaxFailures:  2,
+		ResetTimeout: 200 * time.Millisecond,
+	}
+
+	factory := loadbalancer.NewLoadBalancerFactory()
+	balancer := factory.CreateLoadBalancer("round-robin", []string{server.URL}, circuitConfig, &testLogger{})
+	clientProvider := loadbalancer.NewLoadBalancerAdapter(balancer)
+	handler := proxy.NewProxyHandler(clientProvider, &testLogger{})
+
+	// Test 1: CLOSED STATE - First request fails (network error)
+	t.Log("Testing CLOSED state (first failure)...")
+	req1, _ := http.NewRequest("GET", "/test", nil)
+	w1 := httptest.NewRecorder()
+	handler.ProxyRequest(w1, req1)
+
+	assert.Equal(t, http.StatusBadGateway, w1.Code)
+	assert.Contains(t, w1.Body.String(), "cannot reach server")
+
+	// Test 2: CLOSED STATE - Second request fails, circuit opens
+	t.Log("Testing CLOSED state (second failure)...")
+	req2, _ := http.NewRequest("GET", "/test", nil)
+	w2 := httptest.NewRecorder()
+	handler.ProxyRequest(w2, req2)
+
+	assert.Equal(t, http.StatusBadGateway, w2.Code)
+	assert.Contains(t, w2.Body.String(), "cannot reach server")
+
+	// Test 3: OPEN STATE - Multiple requests should be blocked by circuit breaker
+	for i := 0; i < 3; i++ {
+		req := httptest.NewRequest("GET", "/test", nil)
+		w := httptest.NewRecorder()
+		handler.ProxyRequest(w, req)
+
+		assert.Equal(t, http.StatusBadGateway, w.Code)
+		assert.Contains(t, w.Body.String(), "circuit breaker is open")
+		t.Logf("Request %d blocked: %s", i+1, w.Body.String())
+	}
+
+	// Test 4: Wait for reset timeout and test HALF-OPEN state
+	time.Sleep(250 * time.Millisecond)
+
+	req4, _ := http.NewRequest("GET", "/test", nil)
+	w4 := httptest.NewRecorder()
+	handler.ProxyRequest(w4, req4)
+
+	assert.Equal(t, http.StatusOK, w4.Code)
+	assert.Equal(t, "success", w4.Body.String())
+
+	// Test 5: CLOSED STATE - Circuit should be closed again
+	req5, _ := http.NewRequest("GET", "/test", nil)
+	w5 := httptest.NewRecorder()
+	handler.ProxyRequest(w5, req5)
+
+	assert.Equal(t, http.StatusOK, w5.Code)
+	assert.Equal(t, "success", w5.Body.String())
+}

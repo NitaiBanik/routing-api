@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"routing-api/internal/circuit"
 	"routing-api/internal/loadbalancer"
 	"routing-api/internal/logger"
 
@@ -52,7 +53,12 @@ func (h *ProxyHandler) ProxyRequest(w http.ResponseWriter, req *http.Request) {
 			zap.String("path", req.URL.Path),
 			zap.Error(err),
 		)
-		http.Error(w, "cannot reach server", http.StatusBadGateway)
+		
+		if cbErr, ok := err.(*circuit.CircuitBreakerError); ok {
+			http.Error(w, cbErr.Message, http.StatusBadGateway)
+		} else {
+			http.Error(w, "cannot reach server", http.StatusBadGateway)
+		}
 		return
 	}
 	defer resp.Body.Close()
